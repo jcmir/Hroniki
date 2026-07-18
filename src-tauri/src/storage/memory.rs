@@ -1,4 +1,4 @@
-use crate::domain::{Category, ChronicleObject, Entry};
+use crate::domain::{Category, ChronicleObject, Entry, EntryId, Photo};
 
 use super::ChronologyRepository;
 
@@ -7,6 +7,7 @@ pub struct MemoryChronologyRepository {
     categories: Vec<Category>,
     objects: Vec<ChronicleObject>,
     entries: Vec<Entry>,
+    photos: Vec<Photo>,
 }
 
 #[async_trait::async_trait]
@@ -26,6 +27,11 @@ impl ChronologyRepository for MemoryChronologyRepository {
         Ok(())
     }
 
+    async fn save_photo(&mut self, photo: Photo) -> Result<(), String> {
+        self.photos.push(photo);
+        Ok(())
+    }
+
     async fn categories(&self) -> Result<Vec<Category>, String> {
         Ok(self.categories.clone())
     }
@@ -36,6 +42,15 @@ impl ChronologyRepository for MemoryChronologyRepository {
 
     async fn entries(&self) -> Result<Vec<Entry>, String> {
         Ok(self.entries.clone())
+    }
+
+    async fn entry_photos(&self, entry_id: EntryId) -> Result<Vec<Photo>, String> {
+        let entry_photos = self.photos
+            .iter()
+            .filter(|p| p.entry_id == entry_id)
+            .cloned()
+            .collect();
+        Ok(entry_photos)
     }
 }
 

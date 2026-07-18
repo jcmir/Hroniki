@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use super::{CategoryId, ChronicleObjectId, DomainError, EntryId};
+use super::{CategoryId, ChronicleObjectId, DomainError, EntryId, PhotoId};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Category {
@@ -83,6 +83,32 @@ impl Entry {
         })
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Photo {
+    pub id: PhotoId,
+    pub entry_id: EntryId,
+    pub path: String,
+    pub thumbnail: String,
+    pub created_at: DateTime<Utc>,
+}
+
+impl Photo {
+    pub fn new(
+        entry_id: EntryId,
+        path: impl Into<String>,
+        thumbnail: impl Into<String>,
+    ) -> Self {
+        Self {
+            id: PhotoId::new(),
+            entry_id,
+            path: path.into(),
+            thumbnail: thumbnail.into(),
+            created_at: Utc::now(),
+        }
+    }
+}
+
 
 fn validate_required_text(value: String, field: &'static str) -> Result<String, DomainError> {
     let value = value.trim();

@@ -42,3 +42,4 @@ macro_rules! define_id {
 define_id!(CategoryId);
 define_id!(ChronicleObjectId);
 define_id!(EntryId);
+define_id!(PhotoId);

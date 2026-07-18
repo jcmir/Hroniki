@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use sqlx::{Row, SqlitePool};
 
-use crate::domain::{Category, CategoryId, ChronicleObject, ChronicleObjectId, Entry, EntryId};
+use crate::domain::{Category, CategoryId, ChronicleObject, ChronicleObjectId, Entry, EntryId, Photo, PhotoId};
 
 use super::ChronologyRepository;
 
@@ -245,6 +245,88 @@ impl ChronologyRepository for SqliteChronologyRepository {
 
         Ok(result)
     }
+
+    async fn save_photo(&mut self, photo: Photo) -> Result<(), String> {
+        sqlx::query(
+            r#"
+            INSERT INTO photos
+            (
+                id,
+                entry_id,
+                path,
+                thumbnail,
+                created_at
+            )
+            VALUES
+            (
+                $1,
+                $2,
+                $3,
+                $4,
+                $5
+            )
+            ON CONFLICT(id) DO UPDATE SET
+                entry_id = excluded.entry_id,
+                path = excluded.path,
+                thumbnail = excluded.thumbnail,
+                created_at = excluded.created_at
+            "#,
+        )
+        .bind(photo.id.value().to_string())
+        .bind(photo.entry_id.value().to_string())
+        .bind(photo.path)
+        .bind(photo.thumbnail)
+        .bind(photo.created_at.to_rfc3339())
+        .execute(&self.pool)
+        .await
+        .map_err(|error| error.to_string())?;
+
+        Ok(())
+    }
+
+    async fn entry_photos(&self, entry_id: EntryId) -> Result<Vec<Photo>, String> {
+        let rows = sqlx::query(
+            r#"
+            SELECT
+                id,
+                entry_id,
+                path,
+                thumbnail,
+                created_at
+            FROM photos
+            WHERE entry_id = $1
+            ORDER BY created_at ASC
+            "#,
+        )
+        .bind(entry_id.value().to_string())
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|error| error.to_string())?;
+
+        let mut result = Vec::new();
+
+        for row in rows {
+            let id: String = row.try_get("id").map_err(|e| e.to_string())?;
+            let entry_id_str: String = row.try_get("entry_id").map_err(|e| e.to_string())?;
+            let path: String = row.try_get("path").map_err(|e| e.to_string())?;
+            let thumbnail: String = row.try_get("thumbnail").map_err(|e| e.to_string())?;
+            let created_at: String = row.try_get("created_at").map_err(|e| e.to_string())?;
+
+            result.push(Photo {
+                id: PhotoId::from(uuid::Uuid::parse_str(&id).map_err(|e| e.to_string())?),
+                entry_id: EntryId::from(
+                    uuid::Uuid::parse_str(&entry_id_str).map_err(|e| e.to_string())?,
+                ),
+                path,
+                thumbnail,
+                created_at: DateTime::parse_from_rfc3339(&created_at)
+                    .map_err(|e| e.to_string())?
+                    .with_timezone(&Utc),
+            });
+        }
+
+        Ok(result)
+    }
 }
 
 #[cfg(test)]
@@ -325,5 +407,31 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].title, "Treatment");
         assert_eq!(entries[0].object_id, object.id);
+    }
+
+    #[tokio::test]
+    async fn saves_and_reads_photo() {
+        let pool = create_pool("sqlite::memory:").await.unwrap();
+
+        run_migrations(&pool).await.unwrap();
+
+        let mut repository = SqliteChronologyRepository::new(pool);
+
+        let category = Category::new("Garden").unwrap();
+        repository.save_category(category.clone()).await.unwrap();
+
+        let object = ChronicleObject::new(category.id, "Apple tree", None).unwrap();
+        repository.save_object(object.clone()).await.unwrap();
+
+        let entry = Entry::new(object.id, Utc::now(), "Treatment", None).unwrap();
+        repository.save_entry(entry.clone()).await.unwrap();
+
+        let photo = Photo::new(entry.id, "original.jpg", "thumbnail.jpg");
+        repository.save_photo(photo.clone()).await.unwrap();
+
+        let photos = repository.entry_photos(entry.id).await.unwrap();
+        assert_eq!(photos.len(), 1);
+        assert_eq!(photos[0].path, "original.jpg");
+        assert_eq!(photos[0].thumbnail, "thumbnail.jpg");
     }
 }

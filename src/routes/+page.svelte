@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { fade, slide } from 'svelte/transition';
-  import { invoke } from '@tauri-apps/api/core';
+  import { invoke, convertFileSrc } from '@tauri-apps/api/core';
   import '../app.css';
   import TimelineCard from '$lib/components/TimelineCard.svelte';
   import BottomNav from '$lib/components/BottomNav.svelte';
@@ -37,6 +37,12 @@
       description: 'Самочувствие стало лучше. Продолжаю бег по утрам.'
     }
   ]);
+  
+  // Mapping of mock entry IDs to mock photos
+  let mockPhotosMap = new Map<string, any[]>([
+    ['e1', [{ id: 'p1', entry_id: 'e1', path: '/garden_tomatoes.png', thumbnail: '/garden_tomatoes.png' }]],
+    ['e2', [{ id: 'p2', entry_id: 'e2', path: '/running_shoes.png', thumbnail: '/running_shoes.png' }]]
+  ]);
 
   // Navigation state
   let activeTab = $state<'feed' | 'objects' | 'reminders' | 'settings'>('feed');
@@ -58,6 +64,9 @@
   let newEntryDesc = $state('');
   let notifyToggle = $state(false);
   let reminderPeriod = $state('Через 14 дней');
+  
+  // Selected photos paths (absolute paths before saving)
+  let selectedPhotoPaths = $state<string[]>([]);
 
   onMount(async () => {
     await refreshData();
@@ -79,6 +88,10 @@
       if (cmd === 'get_entries') {
         return mockEntries as T;
       }
+      if (cmd === 'get_entry_photos') {
+        const customPhotos = mockPhotosMap.get(args.entryId) || [];
+        return customPhotos as T;
+      }
       if (cmd === 'create_object') {
         const newObj = {
           id: `obj-${Math.random()}`,
@@ -98,7 +111,27 @@
           description: args.description || null
         };
         mockEntries.unshift(newEnt);
+        
+        // Save mock photos
+        if (args.imageFilenames && args.imageFilenames.length > 0) {
+          const mockPhotosList = args.imageFilenames.map((f: string) => ({
+            id: `p-${Math.random()}`,
+            entry_id: newEnt.id,
+            path: f,
+            thumbnail: f
+          }));
+          mockPhotosMap.set(newEnt.id, mockPhotosList);
+        }
+        
         return newEnt.id as T;
+      }
+      if (cmd === 'select_images') {
+        // Return a mock local image file path for browser environment demo
+        return ['/garden_tomatoes.png'] as T;
+      }
+      if (cmd === 'save_media') {
+        // Return the source path directly as the filename in web fallback mode
+        return args.sourcePath as T;
       }
       return null as T;
     }
@@ -126,7 +159,9 @@
       }
 
       const rawEntries = await safeInvoke<any[]>('get_entries');
-      entries = rawEntries.map(e => {
+      const loadedEntries = [];
+
+      for (const e of rawEntries) {
         const obj = objects.find(o => o.id === e.object_id);
         const cat = obj ? categories.find(c => c.id === obj.category_id) : null;
         
@@ -135,41 +170,81 @@
           'Здоровье': 'pink',
           'Авто': 'blue'
         };
-        const catName = cat ? cat.name : 'Сад'; // Default to Сад for mockup items
+        const catName = cat ? cat.name : 'Сад';
 
         const dateObj = new Date(e.occurred_at);
         const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-        return {
+        // Retrieve photos from DB
+        const rawPhotos = await safeInvoke<any[]>('get_entry_photos', { entryId: e.id });
+        const imageUrls = [];
+        for (const p of rawPhotos) {
+          const isTauri = typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__;
+          if (isTauri) {
+            const absolutePath = await invoke<string>('get_media_path', { filename: p.path });
+            imageUrls.push(convertFileSrc(absolutePath));
+          } else {
+            imageUrls.push(p.path);
+          }
+        }
+
+        loadedEntries.push({
           id: e.id,
           categoryName: catName,
           categoryIcon: catName === 'Сад' ? '🌱' : catName === 'Здоровье' ? '❤️' : catName === 'Авто' ? '🚗' : '✨',
           categoryTheme: themeMap[catName] || 'purple',
           time: timeStr,
           content: `${e.title}${e.description ? '\n' + e.description : ''}`,
-          images: catName === 'Сад' ? ['/garden_tomatoes.png'] : catName === 'Здоровье' ? ['/running_shoes.png'] : catName === 'Авто' ? ['/car_maintenance.png'] : [],
+          images: imageUrls,
           tags: catName === 'Сад' ? ['яблоня', 'уход'] : catName === 'Здоровье' ? ['здоровье'] : ['обслуживание'],
           reminderText: ''
-        };
-      });
+        });
+      }
+      entries = loadedEntries;
     } catch (e) {
       console.error('Failed to load data from database:', e);
     }
+  }
+
+  async function handleAddPhoto() {
+    try {
+      const paths = await safeInvoke<string[] | null>('select_images');
+      if (paths) {
+        selectedPhotoPaths = [...selectedPhotoPaths, ...paths];
+      }
+    } catch (e) {
+      console.error('Failed to select images:', e);
+    }
+  }
+
+  function handleRemovePhoto(index: number) {
+    selectedPhotoPaths = selectedPhotoPaths.filter((_, i) => i !== index);
   }
 
   async function handleSaveEntry() {
     if (!selectedObject || !newEntryTitle) return;
 
     try {
+      // Copy and save all picked photos to app data media originals directory
+      const savedFilenames: string[] = [];
+      for (const path of selectedPhotoPaths) {
+        const filename = await safeInvoke<string>('save_media', { sourcePath: path });
+        if (filename) {
+          savedFilenames.push(filename);
+        }
+      }
+
       await safeInvoke('create_entry', {
         objectId: selectedObject,
         title: newEntryTitle,
-        description: newEntryDesc || null
+        description: newEntryDesc || null,
+        imageFilenames: savedFilenames
       });
 
       showAddModal = false;
       newEntryTitle = '';
       newEntryDesc = '';
+      selectedPhotoPaths = [];
       await refreshData();
     } catch (e) {
       console.error('Failed to save entry:', e);
@@ -238,7 +313,7 @@
               <p>Хроника пуста. Нажмите на плюс внизу, чтобы добавить событие.</p>
             </div>
           {:else}
-            {#each entries as item}
+            {#each entries as item (item.id)}
               <TimelineCard {...item} />
             {/each}
           {/if}
@@ -279,7 +354,7 @@
             {#if entries.length === 0}
               <p class="empty-label">Нет записей для этого объекта.</p>
             {:else}
-              {#each entries as item}
+              {#each entries as item (item.id)}
                 <TimelineCard {...item} />
               {/each}
             {/if}
@@ -388,15 +463,42 @@
             ></textarea>
           </div>
 
+          <!-- Photo Selection and Preview Area -->
           <div class="form-group">
-            <label class="form-label" for="photo-upload-btn">Фото</label>
+            <span class="form-label">Фотографии</span>
             <div class="photo-upload-row">
-              <button type="button" id="photo-upload-btn" class="photo-uploader" aria-label="Upload photo">
+              <button
+                type="button"
+                id="photo-upload-btn"
+                class="photo-uploader"
+                onclick={handleAddPhoto}
+                aria-label="Add photo"
+              >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="uploader-icon">
                   <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
                   <circle cx="12" cy="13" r="4"/>
                 </svg>
               </button>
+
+              <!-- Image Previews -->
+              {#if selectedPhotoPaths.length > 0}
+                <div class="previews-container">
+                  {#each selectedPhotoPaths as path, index}
+                    {@const srcUrl = typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__ ? convertFileSrc(path) : path}
+                    <div class="preview-item">
+                      <img src={srcUrl} alt="Preview" class="preview-img" />
+                      <button
+                        type="button"
+                        class="remove-photo-btn"
+                        onclick={() => handleRemovePhoto(index)}
+                        aria-label="Remove photo"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
             </div>
           </div>
 
@@ -895,9 +997,18 @@
     position: relative;
   }
 
+  /* Photo upload row & horizontal previews */
   .photo-upload-row {
     display: flex;
     gap: 12px;
+    align-items: center;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scrollbar-width: none;
+  }
+  
+  .photo-upload-row::-webkit-scrollbar {
+    display: none;
   }
 
   .photo-uploader {
@@ -912,6 +1023,7 @@
     background: none;
     opacity: 0.6;
     transition: opacity 0.2s ease;
+    flex-shrink: 0;
   }
 
   .photo-uploader:hover {
@@ -922,6 +1034,49 @@
     width: 24px;
     height: 24px;
     color: var(--muted);
+  }
+
+  .previews-container {
+    display: flex;
+    gap: 10px;
+  }
+
+  .preview-item {
+    position: relative;
+    width: 72px;
+    height: 72px;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .preview-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .remove-photo-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(24, 24, 27, 0.6);
+    color: white;
+    border: none;
+    font-size: 10px;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    transition: background-color 0.2s;
+  }
+
+  .remove-photo-btn:hover {
+    background: rgba(24, 24, 27, 0.9);
   }
 
   .tags-picker {
