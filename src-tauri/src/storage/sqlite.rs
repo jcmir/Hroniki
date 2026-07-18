@@ -327,6 +327,36 @@ impl ChronologyRepository for SqliteChronologyRepository {
 
         Ok(result)
     }
+
+    async fn delete_entry(&mut self, id: EntryId) -> Result<(), String> {
+        sqlx::query("DELETE FROM entries WHERE id = $1")
+            .bind(id.value().to_string())
+            .execute(&self.pool)
+            .await
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    }
+
+    async fn update_entry(&mut self, id: EntryId, title: String, description: Option<String>) -> Result<(), String> {
+        sqlx::query(
+            r#"
+            UPDATE entries
+            SET
+                title = $1,
+                description = $2,
+                updated_at = $3
+            WHERE id = $4
+            "#,
+        )
+        .bind(title)
+        .bind(description)
+        .bind(Utc::now().to_rfc3339())
+        .bind(id.value().to_string())
+        .execute(&self.pool)
+        .await
+        .map_err(|error| error.to_string())?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

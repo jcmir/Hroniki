@@ -2,6 +2,7 @@
   import Card from './Card.svelte';
 
   interface Props {
+    id: string;
     categoryName: string;
     categoryIcon: string;
     categoryTheme: 'green' | 'blue' | 'pink' | 'orange' | 'purple';
@@ -10,9 +11,11 @@
     images?: string[];
     tags?: string[];
     reminderText?: string;
+    onClick?: (id: string) => void;
   }
 
   let {
+    id,
     categoryName,
     categoryIcon,
     categoryTheme,
@@ -20,7 +23,8 @@
     content,
     images = [],
     tags = [],
-    reminderText = ''
+    reminderText = '',
+    onClick
   }: Props = $props();
 
   const themeClasses = {
@@ -39,7 +43,14 @@
   </div>
 
   <!-- Right Side: Content Card -->
-  <div class="timeline-content">
+  <div
+    class="timeline-content"
+    onclick={() => onClick && onClick(id)}
+    onkeydown={(e) => e.key === 'Enter' && onClick && onClick(id)}
+    role="button"
+    tabindex="0"
+    style="cursor: pointer; outline: none;"
+  >
     <Card>
       <!-- Header with Category -->
       <div class="card-header">

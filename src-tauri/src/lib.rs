@@ -80,6 +80,8 @@ pub fn run() {
             commands::entries::create_entry,
             commands::entries::get_entries,
             commands::entries::get_entry_photos,
+            commands::entries::delete_entry,
+            commands::entries::update_entry,
             commands::media::select_images,
             commands::media::save_media,
             commands::media::get_media_path,

@@ -6,6 +6,7 @@
   import TimelineCard from '$lib/components/TimelineCard.svelte';
   import BottomNav from '$lib/components/BottomNav.svelte';
   import Card from '$lib/components/Card.svelte';
+  import EntryDetail from '$lib/components/EntryDetail.svelte';
 
   // State variables from DB
   let categories = $state<any[]>([]);
@@ -47,6 +48,8 @@
   // Navigation state
   let activeTab = $state<'feed' | 'objects' | 'reminders' | 'settings'>('feed');
   let showAddModal = $state(false);
+  let showDetail = $state(false);
+  let selectedEntry = $state<any>(null);
 
   // Selected date state
   let selectedDateIndex = $state(0);
@@ -132,6 +135,19 @@
       if (cmd === 'save_media') {
         // Return the source path directly as the filename in web fallback mode
         return args.sourcePath as T;
+      }
+      if (cmd === 'delete_entry') {
+        mockEntries = mockEntries.filter(e => e.id !== args.entryId);
+        mockPhotosMap.delete(args.entryId);
+        return null as T;
+      }
+      if (cmd === 'update_entry') {
+        const ent = mockEntries.find(e => e.id === args.entryId);
+        if (ent) {
+          ent.title = args.title;
+          ent.description = args.description;
+        }
+        return null as T;
       }
       return null as T;
     }
@@ -250,6 +266,37 @@
       console.error('Failed to save entry:', e);
     }
   }
+  function handleCardClick(id: string) {
+    const found = entries.find(e => e.id === id);
+    if (found) {
+      selectedEntry = found;
+      showDetail = true;
+    }
+  }
+
+  async function handleDeleteEntry(id: string) {
+    try {
+      await safeInvoke('delete_entry', { entryId: id });
+      await refreshData();
+    } catch (e) {
+      console.error('Failed to delete entry:', e);
+    }
+  }
+
+  async function handleSaveEditedEntry(id: string, title: string, desc: string) {
+    try {
+      await safeInvoke('update_entry', { entryId: id, title, description: desc || null });
+      await refreshData();
+      
+      // Update selectedEntry details in view
+      const updated = entries.find(e => e.id === id);
+      if (updated) {
+        selectedEntry = updated;
+      }
+    } catch (e) {
+      console.error('Failed to update entry:', e);
+    }
+  }
 </script>
 
 <main class="app-shell">
@@ -314,7 +361,7 @@
             </div>
           {:else}
             {#each entries as item (item.id)}
-              <TimelineCard {...item} />
+              <TimelineCard {...item} onClick={handleCardClick} />
             {/each}
           {/if}
         </div>
@@ -355,7 +402,7 @@
               <p class="empty-label">Нет записей для этого объекта.</p>
             {:else}
               {#each entries as item (item.id)}
-                <TimelineCard {...item} />
+                <TimelineCard {...item} onClick={handleCardClick} />
               {/each}
             {/if}
           </div>
@@ -539,6 +586,24 @@
         </div>
       </div>
     </div>
+  {/if}
+
+  <!-- Entry Detail View Panel -->
+  {#if showDetail && selectedEntry}
+    <EntryDetail
+      show={showDetail}
+      entryId={selectedEntry.id}
+      categoryName={selectedEntry.categoryName}
+      categoryIcon={selectedEntry.categoryIcon}
+      categoryTheme={selectedEntry.categoryTheme}
+      time={selectedEntry.time}
+      content={selectedEntry.content}
+      images={selectedEntry.images}
+      tags={selectedEntry.tags}
+      onClose={() => showDetail = false}
+      onDelete={handleDeleteEntry}
+      onSave={handleSaveEditedEntry}
+    />
   {/if}
 </main>
 

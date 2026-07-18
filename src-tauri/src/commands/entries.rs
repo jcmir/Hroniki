@@ -1,4 +1,4 @@
-use tauri::State;
+use tauri::{Manager, State};
 
 use crate::{app_state::AppState, domain::Entry, storage::ChronologyRepository};
 
@@ -53,4 +53,50 @@ pub async fn get_entry_photos(
     let entry_uuid = uuid::Uuid::parse_str(&entry_id).map_err(|e| e.to_string())?;
     let id = crate::domain::EntryId::from(entry_uuid);
     service.repository().entry_photos(id).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn delete_entry(
+    entry_id: String,
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let entry_uuid = uuid::Uuid::parse_str(&entry_id).map_err(|e| e.to_string())?;
+    let id = crate::domain::EntryId::from(entry_uuid);
+
+    let mut service = state.service.lock().await;
+
+    // Get the photos associated with this entry before deleting it
+    let photos = service.repository().entry_photos(id).await.map_err(|e| e.to_string())?;
+
+    // Delete the entry from the database (cascade deletes photo database records)
+    service.repository_mut().delete_entry(id).await.map_err(|e| e.to_string())?;
+
+    // Physical deletion of original photo files from media originals directory
+    if let Ok(app_data_dir) = app.path().app_data_dir() {
+        let media_originals_dir = app_data_dir.join("media").join("originals");
+        for photo in photos {
+            let file_path = media_originals_dir.join(&photo.path);
+            if file_path.exists() {
+                let _ = std::fs::remove_file(file_path);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn update_entry(
+    entry_id: String,
+    title: String,
+    description: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let entry_uuid = uuid::Uuid::parse_str(&entry_id).map_err(|e| e.to_string())?;
+    let id = crate::domain::EntryId::from(entry_uuid);
+
+    let mut service = state.service.lock().await;
+    service.repository_mut().update_entry(id, title, description).await.map_err(|e| e.to_string())?;
+    Ok(())
 }

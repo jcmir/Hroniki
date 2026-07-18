@@ -32,6 +32,21 @@ impl ChronologyRepository for MemoryChronologyRepository {
         Ok(())
     }
 
+    async fn delete_entry(&mut self, id: EntryId) -> Result<(), String> {
+        self.entries.retain(|e| e.id != id);
+        self.photos.retain(|p| p.entry_id != id);
+        Ok(())
+    }
+
+    async fn update_entry(&mut self, id: EntryId, title: String, description: Option<String>) -> Result<(), String> {
+        if let Some(entry) = self.entries.iter_mut().find(|e| e.id == id) {
+            entry.title = title;
+            entry.description = description;
+            entry.updated_at = chrono::Utc::now();
+        }
+        Ok(())
+    }
+
     async fn categories(&self) -> Result<Vec<Category>, String> {
         Ok(self.categories.clone())
     }

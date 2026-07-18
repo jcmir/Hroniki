@@ -10,6 +10,10 @@ pub trait ChronologyRepository {
 
     async fn save_photo(&mut self, photo: Photo) -> Result<(), String>;
 
+    async fn delete_entry(&mut self, id: EntryId) -> Result<(), String>;
+
+    async fn update_entry(&mut self, id: EntryId, title: String, description: Option<String>) -> Result<(), String>;
+
     async fn categories(&self) -> Result<Vec<Category>, String>;
 
     async fn objects(&self) -> Result<Vec<ChronicleObject>, String>;
