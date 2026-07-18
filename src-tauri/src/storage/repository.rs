@@ -1,15 +1,16 @@
 use crate::domain::{Category, ChronicleObject, Entry};
 
+#[async_trait::async_trait]
 pub trait ChronologyRepository {
-    fn save_category(&mut self, category: Category);
+    async fn save_category(&mut self, category: Category) -> Result<(), String>;
 
-    fn save_object(&mut self, object: ChronicleObject);
+    async fn save_object(&mut self, object: ChronicleObject) -> Result<(), String>;
 
-    fn save_entry(&mut self, entry: Entry);
+    async fn save_entry(&mut self, entry: Entry) -> Result<(), String>;
 
-    fn categories(&self) -> Vec<Category>;
+    async fn categories(&self) -> Result<Vec<Category>, String>;
 
-    fn objects(&self) -> Vec<ChronicleObject>;
+    async fn objects(&self) -> Result<Vec<ChronicleObject>, String>;
 
-    fn entries(&self) -> Vec<Entry>;
+    async fn entries(&self) -> Result<Vec<Entry>, String>;
 }
