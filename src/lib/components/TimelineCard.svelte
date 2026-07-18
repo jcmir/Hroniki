@@ -9,8 +9,7 @@
     content: string;
     images?: string[];
     tags?: string[];
-    commentsCount?: number;
-    likesCount?: number;
+    reminderText?: string;
   }
 
   let {
@@ -21,8 +20,7 @@
     content,
     images = [],
     tags = [],
-    commentsCount = 0,
-    likesCount = 0
+    reminderText = ''
   }: Props = $props();
 
   const themeClasses = {
@@ -34,10 +32,10 @@
   };
 </script>
 
-<div class="timeline-item">
+<div class="timeline-item {themeClasses[categoryTheme]}">
   <!-- Left Side: Date / Timeline Line -->
   <div class="timeline-left">
-    <div class="timeline-dot {themeClasses[categoryTheme]}"></div>
+    <div class="timeline-dot"></div>
   </div>
 
   <!-- Right Side: Content Card -->
@@ -45,7 +43,7 @@
     <Card>
       <!-- Header with Category -->
       <div class="card-header">
-        <span class="category-badge {themeClasses[categoryTheme]}">
+        <span class="category-badge">
           <span class="category-icon">{categoryIcon}</span>
           <span class="category-name">{categoryName}</span>
         </span>
@@ -76,20 +74,14 @@
 
       <!-- Footer Info -->
       <div class="card-footer">
-        <span class="time-label">{time}</span>
-        <div class="actions">
-          <button class="action-btn">
-            <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
-            </svg>
-            <span class="action-count">{commentsCount}</span>
-          </button>
-          <button class="action-btn like">
-            <svg class="action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-            </svg>
-            <span class="action-count">{likesCount}</span>
-          </button>
+        <span class="time-label">создано {time}</span>
+        <div class="meta-row">
+          {#if images.length > 0}
+            <span class="meta-badge">📷 {images.length} фото</span>
+          {/if}
+          {#if reminderText}
+            <span class="meta-badge reminder">🔔 {reminderText}</span>
+          {/if}
         </div>
       </div>
     </Card>
@@ -116,7 +108,7 @@
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background-color: var(--muted);
+    background-color: var(--badge-color);
     z-index: 2;
     margin-top: 30px;
     box-shadow: 0 0 0 4px var(--background);
@@ -127,37 +119,43 @@
     transform: scale(1.3);
   }
 
-  /* Themes */
+  /* Themes with custom backgrounds and colors */
   .theme-green {
     --badge-bg: var(--accent-green-bg);
     --badge-color: var(--accent-green);
+    --card-bg-tint: #f2faf4;
   }
   .theme-blue {
     --badge-bg: var(--accent-blue-bg);
     --badge-color: var(--accent-blue);
+    --card-bg-tint: #f2f7fe;
   }
   .theme-pink {
     --badge-bg: var(--accent-pink-bg);
     --badge-color: var(--accent-pink);
+    --card-bg-tint: #fdf5f7;
   }
   .theme-orange {
     --badge-bg: var(--accent-orange-bg);
     --badge-color: var(--accent-orange);
+    --card-bg-tint: #fef8f2;
   }
   .theme-purple {
     --badge-bg: rgba(96, 37, 255, 0.08);
     --badge-color: var(--primary-purple);
+    --card-bg-tint: #f8f6ff;
   }
-
-  .timeline-dot.theme-green { background-color: var(--accent-green); }
-  .timeline-dot.theme-blue { background-color: var(--accent-blue); }
-  .timeline-dot.theme-pink { background-color: var(--accent-pink); }
-  .timeline-dot.theme-orange { background-color: var(--accent-orange); }
-  .timeline-dot.theme-purple { background-color: var(--primary-purple); }
 
   .timeline-content {
     flex-grow: 1;
     padding-left: 12px;
+  }
+
+  /* Style the global Card component wrapper from parent scope */
+  .timeline-content :global(.card) {
+    background-color: var(--card-bg-tint);
+    border-left: 4px solid var(--badge-color);
+    padding-left: 20px;
   }
 
   .card-header {
@@ -187,12 +185,14 @@
     margin-bottom: 16px;
   }
 
-  /* Photo Grid */
+  /* Photo Grid popped out spanning full card width */
   .photo-grid {
     display: grid;
     gap: 8px;
     margin-bottom: 16px;
-    border-radius: var(--radius-lg);
+    margin-left: -20px;
+    margin-right: -24px;
+    width: calc(100% + 44px);
     overflow: hidden;
   }
 
@@ -202,7 +202,7 @@
 
   .photo-wrapper {
     position: relative;
-    aspect-ratio: 4/3;
+    aspect-ratio: 16/10;
     background-color: var(--light-gray);
   }
 
@@ -232,11 +232,12 @@
 
   .tag-pill {
     padding: 4px 10px;
-    background-color: var(--light-gray);
+    background-color: rgba(255, 255, 255, 0.6);
     color: var(--muted);
     border-radius: 8px;
     font-size: 0.8rem;
     font-weight: 500;
+    border: 1px solid rgba(0,0,0,0.03);
   }
 
   /* Footer */
@@ -253,38 +254,23 @@
     color: var(--muted);
   }
 
-  .actions {
+  .meta-row {
     display: flex;
-    gap: 16px;
+    gap: 8px;
   }
 
-  .action-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--muted);
-    transition: color 0.2s ease, transform 0.1s ease;
-  }
-
-  .action-btn:hover {
-    color: var(--primary-purple);
-    transform: scale(1.05);
-  }
-
-  .action-btn.like:hover {
-    color: var(--primary-pink);
-  }
-
-  .action-icon {
-    width: 18px;
-    height: 18px;
-  }
-
-  .action-count {
-    font-size: 0.8rem;
+  .meta-badge {
+    font-size: 0.78rem;
     font-weight: 600;
+    color: var(--muted);
+    background-color: rgba(255, 255, 255, 0.7);
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(0,0,0,0.02);
+  }
+
+  .meta-badge.reminder {
+    color: var(--primary-purple);
+    background-color: rgba(96, 37, 255, 0.05);
   }
 </style>

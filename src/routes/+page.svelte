@@ -1,11 +1,42 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { fade, slide, scale } from 'svelte/transition';
+  import { fade, slide } from 'svelte/transition';
   import { invoke } from '@tauri-apps/api/core';
   import '../app.css';
   import TimelineCard from '$lib/components/TimelineCard.svelte';
   import BottomNav from '$lib/components/BottomNav.svelte';
   import Card from '$lib/components/Card.svelte';
+
+  // State variables from DB
+  let categories = $state<any[]>([]);
+  let objects = $state<any[]>([]);
+  let entries = $state<any[]>([]);
+
+  // Browser-only mockup fallback database
+  let mockCategories = [
+    { id: '1', name: 'Сад' },
+    { id: '2', name: 'Здоровье' },
+    { id: '3', name: 'Авто' }
+  ];
+  let mockObjects = [
+    { id: 'obj1', category_id: '1', name: 'Яблоня', description: 'Дерево в саду' }
+  ];
+  let mockEntries = $state<any[]>([
+    {
+      id: 'e1',
+      object_id: 'obj1',
+      occurred_at: new Date(Date.now() - 3600000).toISOString(),
+      title: 'Опрыскала томаты Фитовермом от тли',
+      description: 'Листья выглядят намного лучше.'
+    },
+    {
+      id: 'e2',
+      object_id: 'obj1',
+      occurred_at: new Date(Date.now() - 7200000).toISOString(),
+      title: 'Сдал анализы',
+      description: 'Самочувствие стало лучше. Продолжаю бег по утрам.'
+    }
+  ]);
 
   // Navigation state
   let activeTab = $state<'feed' | 'objects' | 'reminders' | 'settings'>('feed');
@@ -14,90 +45,152 @@
   // Selected date state
   let selectedDateIndex = $state(0);
   const dates = [
-    { day: '16', month: 'Июл', weekday: 'Среда' },
-    { day: '15', month: 'Июл', weekday: 'Вторник' },
-    { day: '14', month: 'Июл', weekday: 'Понедельник' },
-    { day: '13', month: 'Июл', weekday: 'Воскресенье' },
-    { day: '12', month: 'Июл', weekday: 'Суббота' }
+    { day: '18', month: 'Июл', weekday: 'Суббота' },
+    { day: '17', month: 'Июл', weekday: 'Пятница' },
+    { day: '16', month: 'Июл', weekday: 'Четверг' },
+    { day: '15', month: 'Июл', weekday: 'Среда' },
+    { day: '14', month: 'Июл', weekday: 'Вторник' }
   ];
 
   // Forms state
+  let selectedObject = $state('');
   let newEntryTitle = $state('');
   let newEntryDesc = $state('');
-  let newEntryCategory = $state('Сад');
-  let newEntryPhotos = $state<string[]>([]);
   let notifyToggle = $state(false);
+  let reminderPeriod = $state('Через 14 дней');
 
-  // Categories & Mock data
-  const feedItems = [
-    {
-      categoryName: 'Сад',
-      categoryIcon: '🌱',
-      categoryTheme: 'green' as const,
-      time: '08:45',
-      content: 'Опрыскала томаты Фитовермом от тли. Листья выглядят намного лучше.',
-      images: ['/garden_tomatoes.png'],
-      tags: ['томаты', 'обработка', 'сад'],
-      commentsCount: 2,
-      likesCount: 4
-    },
-    {
-      categoryName: 'Здоровье',
-      categoryIcon: '❤️',
-      categoryTheme: 'pink' as const,
-      time: '07:30',
-      content: 'Сдал анализы, самочувствие стало лучше. Продолжаю бег по утрам.',
-      images: ['/running_shoes.png'],
-      tags: ['бег', 'здоровье', 'утро'],
-      commentsCount: 1,
-      likesCount: 6
-    },
-    {
-      categoryName: 'Авто',
-      categoryIcon: '🚗',
-      categoryTheme: 'blue' as const,
-      time: '18:15',
-      content: 'Заменил масло и фильтры. Машина чувствует себя отлично.',
-      images: ['/car_maintenance.png'],
-      tags: ['авто', 'масло', 'обслуживание'],
-      commentsCount: 3,
-      likesCount: 9
-    }
-  ];
+  onMount(async () => {
+    await refreshData();
+  });
 
-  // Handle add category through Tauri commands (demonstration)
-  async function testTauriCommand() {
-    try {
-      const categoryId = await invoke('create_category', { name: newEntryCategory });
-      console.log('Created category with ID:', categoryId);
-    } catch (e) {
-      console.error('Error invoking Tauri command:', e);
+  // Safe wrapper around Tauri invoke to run gracefully in standard browsers
+  async function safeInvoke<T>(cmd: string, args?: any): Promise<T> {
+    const isTauri = typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__;
+    if (isTauri) {
+      return await invoke<T>(cmd, args);
+    } else {
+      console.warn(`[Tauri Mock] Invoke '${cmd}'`, args);
+      if (cmd === 'get_categories') {
+        return mockCategories as T;
+      }
+      if (cmd === 'get_objects') {
+        return mockObjects as T;
+      }
+      if (cmd === 'get_entries') {
+        return mockEntries as T;
+      }
+      if (cmd === 'create_object') {
+        const newObj = {
+          id: `obj-${Math.random()}`,
+          category_id: args.categoryId,
+          name: args.name,
+          description: args.description || null
+        };
+        mockObjects.push(newObj);
+        return newObj.id as T;
+      }
+      if (cmd === 'create_entry') {
+        const newEnt = {
+          id: `ent-${Math.random()}`,
+          object_id: args.objectId,
+          occurred_at: new Date().toISOString(),
+          title: args.title,
+          description: args.description || null
+        };
+        mockEntries.unshift(newEnt);
+        return newEnt.id as T;
+      }
+      return null as T;
     }
   }
 
-  function handleSaveEntry() {
-    // Add mock entry to feed logic or just close modal
-    showAddModal = false;
-    testTauriCommand();
-    newEntryTitle = '';
-    newEntryDesc = '';
+  async function refreshData() {
+    try {
+      categories = await safeInvoke<any[]>('get_categories');
+      objects = await safeInvoke<any[]>('get_objects');
+
+      // Setup default mock object if empty
+      if (categories.length > 0 && objects.length === 0) {
+        const gardenCat = categories.find(c => c.name === 'Сад') || categories[0];
+        await safeInvoke('create_object', {
+          categoryId: gardenCat.id,
+          name: 'Яблоня',
+          description: 'Дерево в саду'
+        });
+        objects = await safeInvoke<any[]>('get_objects');
+      }
+
+      // Pre-select first object in form
+      if (objects.length > 0 && !selectedObject) {
+        selectedObject = objects[0].id;
+      }
+
+      const rawEntries = await safeInvoke<any[]>('get_entries');
+      entries = rawEntries.map(e => {
+        const obj = objects.find(o => o.id === e.object_id);
+        const cat = obj ? categories.find(c => c.id === obj.category_id) : null;
+        
+        const themeMap: Record<string, 'green' | 'blue' | 'pink' | 'orange' | 'purple'> = {
+          'Сад': 'green',
+          'Здоровье': 'pink',
+          'Авто': 'blue'
+        };
+        const catName = cat ? cat.name : 'Сад'; // Default to Сад for mockup items
+
+        const dateObj = new Date(e.occurred_at);
+        const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        return {
+          id: e.id,
+          categoryName: catName,
+          categoryIcon: catName === 'Сад' ? '🌱' : catName === 'Здоровье' ? '❤️' : catName === 'Авто' ? '🚗' : '✨',
+          categoryTheme: themeMap[catName] || 'purple',
+          time: timeStr,
+          content: `${e.title}${e.description ? '\n' + e.description : ''}`,
+          images: catName === 'Сад' ? ['/garden_tomatoes.png'] : catName === 'Здоровье' ? ['/running_shoes.png'] : catName === 'Авто' ? ['/car_maintenance.png'] : [],
+          tags: catName === 'Сад' ? ['яблоня', 'уход'] : catName === 'Здоровье' ? ['здоровье'] : ['обслуживание'],
+          reminderText: ''
+        };
+      });
+    } catch (e) {
+      console.error('Failed to load data from database:', e);
+    }
+  }
+
+  async function handleSaveEntry() {
+    if (!selectedObject || !newEntryTitle) return;
+
+    try {
+      await safeInvoke('create_entry', {
+        objectId: selectedObject,
+        title: newEntryTitle,
+        description: newEntryDesc || null
+      });
+
+      showAddModal = false;
+      newEntryTitle = '';
+      newEntryDesc = '';
+      await refreshData();
+    } catch (e) {
+      console.error('Failed to save entry:', e);
+    }
   }
 </script>
 
 <main class="app-shell">
-  <!-- Status bar spacer for mobile/desktop app header look -->
+  <!-- Header bar -->
   <header class="app-header">
     <div class="header-logo">
       <span class="logo-spark">✨</span>
       <h1>ХРОНИКИ</h1>
     </div>
     <div class="header-actions">
-      <button class="icon-btn" aria-label="Search">
+      <button type="button" class="icon-btn" aria-label="Search">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
       </button>
-      <button class="icon-btn" aria-label="Filters">
+      <button type="button" class="icon-btn" aria-label="Filters">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/>
           <line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/>
@@ -109,7 +202,7 @@
     </div>
   </header>
 
-  <!-- Main Content Container with max width of mobile device -->
+  <!-- Content view -->
   <div class="content-viewport">
     {#if activeTab === 'feed'}
       <!-- Feed Tab: Date Selector & Timeline -->
@@ -118,6 +211,7 @@
         <div class="date-selector">
           {#each dates as d, idx}
             <button
+              type="button"
               class="date-pill {selectedDateIndex === idx ? 'active' : ''}"
               onclick={() => selectedDateIndex = idx}
             >
@@ -138,63 +232,63 @@
         <!-- Vertical Timeline Feed -->
         <div class="timeline-container">
           <div class="timeline-axis"></div>
-          {#each feedItems as item}
-            <TimelineCard {...item} />
-          {/each}
+          {#if entries.length === 0}
+            <div class="empty-feed">
+              <span class="empty-icon">📖</span>
+              <p>Хроника пуста. Нажмите на плюс внизу, чтобы добавить событие.</p>
+            </div>
+          {:else}
+            {#each entries as item}
+              <TimelineCard {...item} />
+            {/each}
+          {/if}
         </div>
       </section>
     {:else if activeTab === 'objects'}
-      <!-- Objects Tab: Mock Details view (Right Screen in Design) -->
+      <!-- Objects Tab: Object details view -->
       <section class="objects-section" in:fade={{ duration: 200 }}>
-        <!-- Object Main Card -->
-        <div class="object-hero">
-          <div class="object-avatar-wrapper">
-            <img src="/garden_tomatoes.png" alt="Яблоня" class="object-avatar" />
+        {#if objects.length > 0}
+          <div class="object-hero">
+            <div class="object-avatar-wrapper">
+              <img src="/garden_tomatoes.png" alt="Яблоня" class="object-avatar" />
+            </div>
+            <h2 class="object-title">{objects[0].name}</h2>
+            <span class="object-category-badge">🌱 Сад</span>
+            <span class="object-meta">Успешно подключен к SQLite</span>
           </div>
-          <h2 class="object-title">Яблоня</h2>
-          <span class="object-category-badge">🌱 Дерево</span>
-          <span class="object-meta">Создан 30 марта 2025</span>
-        </div>
 
-        <!-- Object Statistics -->
-        <div class="stats-row">
-          <div class="stat-card">
-            <span class="stat-value">8</span>
-            <span class="stat-label">Записей</span>
+          <!-- Statistics -->
+          <div class="stats-row">
+            <div class="stat-card">
+              <span class="stat-value">{entries.length}</span>
+              <span class="stat-label">Записей</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-value">{entries.filter(e => e.images.length > 0).length}</span>
+              <span class="stat-label">Фото</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-value">0</span>
+              <span class="stat-label">Напоминаний</span>
+            </div>
           </div>
-          <div class="stat-card">
-            <span class="stat-value">12</span>
-            <span class="stat-label">Фото</span>
-          </div>
-          <div class="stat-card">
-            <span class="stat-value">2</span>
-            <span class="stat-label">Напоминания</span>
-          </div>
-        </div>
 
-        <!-- Specific Timeline -->
-        <h3 class="section-title">История ухода</h3>
-        <div class="timeline-container">
-          <div class="timeline-axis"></div>
-          <TimelineCard
-            categoryName="Обработка"
-            categoryIcon="🌱"
-            categoryTheme="green"
-            time="30 Июля"
-            content="Повторная обработка Скором. Листья чистые."
-            images={['/garden_tomatoes.png']}
-            tags={['скор', 'грибок']}
-          />
-          <TimelineCard
-            categoryName="Обработка"
-            categoryIcon="pink"
-            categoryTheme="pink"
-            time="16 Июля"
-            content="Первая обработка Скором. Обнаружен грибок."
-            images={['/garden_tomatoes.png']}
-            tags={['грибок', 'скор']}
-          />
-        </div>
+          <h3 class="section-title">История ухода</h3>
+          <div class="timeline-container">
+            <div class="timeline-axis"></div>
+            {#if entries.length === 0}
+              <p class="empty-label">Нет записей для этого объекта.</p>
+            {:else}
+              {#each entries as item}
+                <TimelineCard {...item} />
+              {/each}
+            {/if}
+          </div>
+        {:else}
+          <div class="empty-tab">
+            <h3>Нет объектов</h3>
+          </div>
+        {/if}
       </section>
     {:else if activeTab === 'reminders'}
       <section class="empty-tab" in:fade={{ duration: 200 }}>
@@ -212,8 +306,8 @@
               <span class="setting-value">Светлая уютная</span>
             </div>
             <div class="settings-item">
-              <span class="setting-name">Резервное копирование</span>
-              <span class="setting-value">Включено (локально)</span>
+              <span class="setting-name">База данных</span>
+              <span class="setting-value">SQLite (активна)</span>
             </div>
             <div class="settings-item">
               <span class="setting-name">Версия приложения</span>
@@ -232,59 +326,87 @@
     onAddClick={() => showAddModal = true}
   />
 
-  <!-- Add New Entry Dialog (Middle Screen Mockup) -->
+  <!-- Add New Entry Dialog (Bottom Sheet Style) -->
   {#if showAddModal}
-    <div class="modal-backdrop" transition:fade={{ duration: 200 }} onclick={() => showAddModal = false}>
-      <div class="modal-card" transition:slide={{ duration: 300 }} onclick={(e) => e.stopPropagation()}>
-        <!-- Modal Header -->
-        <header class="modal-header">
-          <button class="text-btn" onclick={() => showAddModal = false}>Отмена</button>
+    <div
+      class="modal-backdrop"
+      transition:fade={{ duration: 200 }}
+      onclick={() => showAddModal = false}
+      onkeydown={(e) => e.key === 'Escape' && (showAddModal = false)}
+      role="button"
+      tabindex="-1"
+      aria-label="Close sheet"
+    >
+      <div
+        class="bottom-sheet"
+        transition:slide={{ duration: 300 }}
+        onclick={(e) => e.stopPropagation()}
+        onkeydown={(e) => e.stopPropagation()}
+        role="presentation"
+      >
+        <!-- Drag Handle Indicator -->
+        <div class="bottom-sheet-handle"></div>
+
+        <!-- Sheet Header -->
+        <header class="sheet-header">
+          <button type="button" class="text-btn" onclick={() => showAddModal = false}>Отмена</button>
           <h2>Новая запись</h2>
-          <button class="text-btn primary" onclick={handleSaveEntry}>Сохранить</button>
+          <button type="button" class="text-btn primary" onclick={handleSaveEntry}>Сохранить</button>
         </header>
 
-        <!-- Form fields -->
-        <div class="modal-form">
+        <!-- Form Fields -->
+        <div class="sheet-form">
           <div class="form-group">
-            <label class="form-label" for="category-select">Для объекта</label>
+            <label class="form-label" for="object-select">Для объекта</label>
             <div class="select-wrapper">
-              <select id="category-select" class="form-select" bind:value={newEntryCategory}>
-                <option value="Сад">🌱 Сад</option>
-                <option value="Здоровье">❤️ Здоровье</option>
-                <option value="Авто">🚗 Авто</option>
+              <select id="object-select" class="form-select" bind:value={selectedObject}>
+                {#each objects as obj}
+                  <option value={obj.id}>🌱 {obj.name}</option>
+                {/each}
               </select>
             </div>
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="desc-input">Что произошло?</label>
+            <label class="form-label" for="title-input">Событие</label>
+            <input
+              id="title-input"
+              type="text"
+              class="form-input"
+              placeholder="Что произошло? (например, Полила яблоню)"
+              bind:value={newEntryTitle}
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="desc-input">Детали (необязательно)</label>
             <textarea
               id="desc-input"
               class="form-textarea"
-              placeholder="Опишите событие..."
+              placeholder="Дополнительные подробности..."
               bind:value={newEntryDesc}
             ></textarea>
           </div>
 
           <div class="form-group">
-            <label class="form-label">Фото</label>
+            <label class="form-label" for="photo-upload-btn">Фото</label>
             <div class="photo-upload-row">
-              <div class="photo-uploader">
+              <button type="button" id="photo-upload-btn" class="photo-uploader" aria-label="Upload photo">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="uploader-icon">
                   <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
                   <circle cx="12" cy="13" r="4"/>
                 </svg>
-              </div>
+              </button>
             </div>
           </div>
 
           <div class="form-group">
-            <label class="form-label">Теги</label>
-            <div class="tags-picker">
-              <span class="tag-pill active">#сад</span>
-              <span class="tag-pill">#томаты</span>
-              <span class="tag-pill">#обработка</span>
-              <span class="add-tag-btn">+</span>
+            <label class="form-label" for="tags-container">Теги</label>
+            <div id="tags-container" class="tags-picker">
+              <span class="tag-pill active">#уход</span>
+              <span class="tag-pill">#яблоня</span>
+              <span class="tag-pill">#сад</span>
+              <button type="button" class="add-tag-btn" aria-label="Add tag">+</button>
             </div>
           </div>
 
@@ -292,21 +414,22 @@
           <div class="form-row-toggle">
             <div class="toggle-details">
               <span class="toggle-title">Напомнить</span>
-              <span class="toggle-desc">Создать задачу в напоминаниях</span>
+              <span class="toggle-desc">Создать напоминание</span>
             </div>
-            <label class="switch">
-              <input type="checkbox" bind:checked={notifyToggle}>
+            <label class="switch" for="notify-toggle-cb">
+              <input type="checkbox" id="notify-toggle-cb" bind:checked={notifyToggle}>
               <span class="slider round"></span>
             </label>
           </div>
 
           {#if notifyToggle}
             <div class="form-group" transition:slide>
+              <label class="form-label" for="reminder-period-select">Периодичность</label>
               <div class="select-wrapper">
-                <select class="form-select">
-                  <option>Через 14 дней</option>
-                  <option>Через 7 дней</option>
-                  <option>Завтра</option>
+                <select id="reminder-period-select" class="form-select" bind:value={reminderPeriod}>
+                  <option value="Через 14 дней">Через 14 дней</option>
+                  <option value="Через 7 дней">Через 7 дней</option>
+                  <option value="Завтра">Завтра</option>
                 </select>
               </div>
             </div>
@@ -325,7 +448,7 @@
     min-height: 100vh;
     align-items: center;
     background-color: var(--background);
-    padding-bottom: 120px; /* Space for BottomNav */
+    padding-bottom: 120px;
   }
 
   .app-header {
@@ -491,6 +614,25 @@
     z-index: 1;
   }
 
+  .empty-feed {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 60px 20px;
+    text-align: center;
+    color: var(--muted);
+  }
+
+  .empty-icon {
+    font-size: 2.5rem;
+    margin-bottom: 12px;
+  }
+
+  .empty-feed p {
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }
+
   /* Objects Section */
   .object-hero {
     display: flex;
@@ -574,6 +716,13 @@
     color: var(--text);
   }
 
+  .empty-label {
+    text-align: center;
+    color: var(--muted);
+    padding: 20px;
+    font-size: 0.9rem;
+  }
+
   /* Settings */
   .settings-list {
     display: flex;
@@ -629,7 +778,7 @@
     color: var(--muted);
   }
 
-  /* Modal Add New Entry */
+  /* Modal bottom sheet container */
   .modal-backdrop {
     position: fixed;
     top: 0;
@@ -645,7 +794,8 @@
     align-items: flex-end;
   }
 
-  .modal-card {
+  /* Bottom sheet styling */
+  .bottom-sheet {
     background: var(--background);
     width: 100%;
     max-width: 480px;
@@ -653,13 +803,22 @@
     max-height: 88vh;
     overflow-y: auto;
     box-shadow: 0 -12px 48px rgba(0, 0, 0, 0.15);
+    padding-bottom: 30px;
   }
 
-  .modal-header {
+  .bottom-sheet-handle {
+    width: 36px;
+    height: 5px;
+    background-color: var(--light-gray);
+    border-radius: 3px;
+    margin: 8px auto 0;
+  }
+
+  .sheet-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 20px 24px;
+    padding: 16px 24px 20px;
     border-bottom: 1px solid rgba(0,0,0,0.03);
     position: sticky;
     top: 0;
@@ -667,7 +826,7 @@
     z-index: 2;
   }
 
-  .modal-header h2 {
+  .sheet-header h2 {
     font-size: 1.05rem;
     font-weight: 700;
   }
@@ -687,7 +846,7 @@
     font-weight: 700;
   }
 
-  .modal-form {
+  .sheet-form {
     padding: 24px;
     display: flex;
     flex-direction: column;
@@ -707,6 +866,7 @@
   }
 
   .form-select,
+  .form-input,
   .form-textarea {
     width: 100%;
     background: var(--surface-opaque);
@@ -721,12 +881,13 @@
   }
 
   .form-select:focus,
+  .form-input:focus,
   .form-textarea:focus {
     border-color: var(--primary-purple);
   }
 
   .form-textarea {
-    min-height: 120px;
+    min-height: 100px;
     resize: none;
   }
 
@@ -748,6 +909,7 @@
     justify-content: center;
     align-items: center;
     cursor: pointer;
+    background: none;
     opacity: 0.6;
     transition: opacity 0.2s ease;
   }
@@ -770,7 +932,6 @@
   }
 
   .tags-picker .tag-pill {
-    cursor: pointer;
     transition: all 0.2s ease;
   }
 
@@ -791,6 +952,7 @@
     font-size: 1.1rem;
     cursor: pointer;
     font-weight: 500;
+    border: none;
   }
 
   /* Toggle Switch */
