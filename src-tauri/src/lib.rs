@@ -85,6 +85,10 @@ pub fn run() {
             commands::media::select_images,
             commands::media::save_media,
             commands::media::get_media_path,
+            commands::reminders::create_reminder,
+            commands::reminders::get_reminders,
+            commands::reminders::complete_reminder,
+            commands::reminders::snooze_reminder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

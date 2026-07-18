@@ -1,4 +1,4 @@
-use crate::domain::{Category, ChronicleObject, Entry, EntryId, Photo};
+use crate::domain::{Category, ChronicleObject, Entry, EntryId, Photo, Reminder};
 
 #[async_trait::async_trait]
 pub trait ChronologyRepository {
@@ -9,6 +9,8 @@ pub trait ChronologyRepository {
     async fn save_entry(&mut self, entry: Entry) -> Result<(), String>;
 
     async fn save_photo(&mut self, photo: Photo) -> Result<(), String>;
+
+    async fn save_reminder(&mut self, reminder: Reminder) -> Result<(), String>;
 
     async fn delete_entry(&mut self, id: EntryId) -> Result<(), String>;
 
@@ -21,4 +23,8 @@ pub trait ChronologyRepository {
     async fn entries(&self) -> Result<Vec<Entry>, String>;
 
     async fn entry_photos(&self, entry_id: EntryId) -> Result<Vec<Photo>, String>;
+
+    async fn entry_reminders(&self, entry_id: EntryId) -> Result<Vec<Reminder>, String>;
+
+    async fn reminders(&self) -> Result<Vec<Reminder>, String>;
 }

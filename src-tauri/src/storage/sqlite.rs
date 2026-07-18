@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use sqlx::{Row, SqlitePool};
 
-use crate::domain::{Category, CategoryId, ChronicleObject, ChronicleObjectId, Entry, EntryId, Photo, PhotoId};
+use crate::domain::{Category, CategoryId, ChronicleObject, ChronicleObjectId, Entry, EntryId, Photo, PhotoId, Reminder, ReminderId};
 
 use super::ChronologyRepository;
 
@@ -357,6 +357,153 @@ impl ChronologyRepository for SqliteChronologyRepository {
         .map_err(|error| error.to_string())?;
         Ok(())
     }
+
+    async fn save_reminder(&mut self, reminder: Reminder) -> Result<(), String> {
+        sqlx::query(
+            r#"
+            INSERT INTO reminders
+            (
+                id,
+                entry_id,
+                trigger_at,
+                status,
+                repeat_days,
+                completed_at
+            )
+            VALUES
+            (
+                $1,
+                $2,
+                $3,
+                $4,
+                $5,
+                $6
+            )
+            ON CONFLICT(id) DO UPDATE SET
+                entry_id = excluded.entry_id,
+                trigger_at = excluded.trigger_at,
+                status = excluded.status,
+                repeat_days = excluded.repeat_days,
+                completed_at = excluded.completed_at
+            "#,
+        )
+        .bind(reminder.id.value().to_string())
+        .bind(reminder.entry_id.value().to_string())
+        .bind(reminder.trigger_at.to_rfc3339())
+        .bind(reminder.status)
+        .bind(reminder.repeat_days)
+        .bind(reminder.completed_at.map(|dt| dt.to_rfc3339()))
+        .execute(&self.pool)
+        .await
+        .map_err(|error| error.to_string())?;
+
+        Ok(())
+    }
+
+    async fn entry_reminders(&self, entry_id: EntryId) -> Result<Vec<Reminder>, String> {
+        let rows = sqlx::query(
+            r#"
+            SELECT
+                id,
+                entry_id,
+                trigger_at,
+                status,
+                repeat_days,
+                completed_at
+            FROM reminders
+            WHERE entry_id = $1
+            "#,
+        )
+        .bind(entry_id.value().to_string())
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|error| error.to_string())?;
+
+        let mut result = Vec::new();
+
+        for row in rows {
+            let id: String = row.try_get("id").map_err(|e| e.to_string())?;
+            let entry_id_str: String = row.try_get("entry_id").map_err(|e| e.to_string())?;
+            let trigger_at: String = row.try_get("trigger_at").map_err(|e| e.to_string())?;
+            let status: String = row.try_get("status").map_err(|e| e.to_string())?;
+            let repeat_days: Option<i32> = row.try_get("repeat_days").map_err(|e| e.to_string())?;
+            let completed_at_str: Option<String> = row.try_get("completed_at").map_err(|e| e.to_string())?;
+
+            let completed_at = match completed_at_str {
+                Some(s) => Some(DateTime::parse_from_rfc3339(&s)
+                    .map_err(|e| e.to_string())?
+                    .with_timezone(&Utc)),
+                None => None,
+            };
+
+            result.push(Reminder {
+                id: ReminderId::from(uuid::Uuid::parse_str(&id).map_err(|e| e.to_string())?),
+                entry_id: EntryId::from(
+                    uuid::Uuid::parse_str(&entry_id_str).map_err(|e| e.to_string())?,
+                ),
+                trigger_at: DateTime::parse_from_rfc3339(&trigger_at)
+                    .map_err(|e| e.to_string())?
+                    .with_timezone(&Utc),
+                status,
+                repeat_days,
+                completed_at,
+            });
+        }
+
+        Ok(result)
+    }
+
+    async fn reminders(&self) -> Result<Vec<Reminder>, String> {
+        let rows = sqlx::query(
+            r#"
+            SELECT
+                id,
+                entry_id,
+                trigger_at,
+                status,
+                repeat_days,
+                completed_at
+            FROM reminders
+            ORDER BY trigger_at ASC
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|error| error.to_string())?;
+
+        let mut result = Vec::new();
+
+        for row in rows {
+            let id: String = row.try_get("id").map_err(|e| e.to_string())?;
+            let entry_id_str: String = row.try_get("entry_id").map_err(|e| e.to_string())?;
+            let trigger_at: String = row.try_get("trigger_at").map_err(|e| e.to_string())?;
+            let status: String = row.try_get("status").map_err(|e| e.to_string())?;
+            let repeat_days: Option<i32> = row.try_get("repeat_days").map_err(|e| e.to_string())?;
+            let completed_at_str: Option<String> = row.try_get("completed_at").map_err(|e| e.to_string())?;
+
+            let completed_at = match completed_at_str {
+                Some(s) => Some(DateTime::parse_from_rfc3339(&s)
+                    .map_err(|e| e.to_string())?
+                    .with_timezone(&Utc)),
+                None => None,
+            };
+
+            result.push(Reminder {
+                id: ReminderId::from(uuid::Uuid::parse_str(&id).map_err(|e| e.to_string())?),
+                entry_id: EntryId::from(
+                    uuid::Uuid::parse_str(&entry_id_str).map_err(|e| e.to_string())?,
+                ),
+                trigger_at: DateTime::parse_from_rfc3339(&trigger_at)
+                    .map_err(|e| e.to_string())?
+                    .with_timezone(&Utc),
+                status,
+                repeat_days,
+                completed_at,
+            });
+        }
+
+        Ok(result)
+    }
 }
 
 #[cfg(test)]
@@ -464,4 +611,46 @@ mod tests {
         assert_eq!(photos[0].path, "original.jpg");
         assert_eq!(photos[0].thumbnail, "thumbnail.jpg");
     }
+
+    #[tokio::test]
+    async fn saves_and_reads_reminder() {
+        let pool = create_pool("sqlite::memory:").await.unwrap();
+        run_migrations(&pool).await.unwrap();
+
+        let mut repository = SqliteChronologyRepository::new(pool);
+
+        let category = Category::new("Garden").unwrap();
+        repository.save_category(category.clone()).await.unwrap();
+
+        let object = ChronicleObject::new(category.id, "Apple tree", None).unwrap();
+        repository.save_object(object.clone()).await.unwrap();
+
+        let entry = Entry::new(object.id, Utc::now(), "Treatment", None).unwrap();
+        repository.save_entry(entry.clone()).await.unwrap();
+
+        let trigger = Utc::now() + chrono::Duration::days(14);
+        let reminder = Reminder::new(entry.id.clone(), trigger, Some(14));
+        repository.save_reminder(reminder.clone()).await.unwrap();
+
+        // Load all reminders
+        let reminders = repository.reminders().await.unwrap();
+        assert_eq!(reminders.len(), 1);
+        assert_eq!(reminders[0].status, "Scheduled");
+        assert_eq!(reminders[0].repeat_days, Some(14));
+
+        // Load via entry
+        let entry_reminders = repository.entry_reminders(entry.id).await.unwrap();
+        assert_eq!(entry_reminders.len(), 1);
+
+        // Update to Completed
+        let mut completed = reminder.clone();
+        completed.status = "Completed".to_string();
+        completed.completed_at = Some(Utc::now());
+        repository.save_reminder(completed).await.unwrap();
+
+        let after = repository.reminders().await.unwrap();
+        assert_eq!(after.len(), 1);
+        assert_eq!(after[0].status, "Completed");
+    }
 }
+

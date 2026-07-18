@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use super::{CategoryId, ChronicleObjectId, DomainError, EntryId, PhotoId};
+use super::{CategoryId, ChronicleObjectId, DomainError, EntryId, PhotoId, ReminderId};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Category {
@@ -105,6 +105,33 @@ impl Photo {
             path: path.into(),
             thumbnail: thumbnail.into(),
             created_at: Utc::now(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Reminder {
+    pub id: ReminderId,
+    pub entry_id: EntryId,
+    pub trigger_at: DateTime<Utc>,
+    pub status: String,
+    pub repeat_days: Option<i32>,
+    pub completed_at: Option<DateTime<Utc>>,
+}
+
+impl Reminder {
+    pub fn new(
+        entry_id: EntryId,
+        trigger_at: DateTime<Utc>,
+        repeat_days: Option<i32>,
+    ) -> Self {
+        Self {
+            id: ReminderId::new(),
+            entry_id,
+            trigger_at,
+            status: "Scheduled".to_string(),
+            repeat_days,
+            completed_at: None,
         }
     }
 }

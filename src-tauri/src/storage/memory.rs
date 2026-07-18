@@ -1,4 +1,4 @@
-use crate::domain::{Category, ChronicleObject, Entry, EntryId, Photo};
+use crate::domain::{Category, ChronicleObject, Entry, EntryId, Photo, Reminder};
 
 use super::ChronologyRepository;
 
@@ -8,6 +8,7 @@ pub struct MemoryChronologyRepository {
     objects: Vec<ChronicleObject>,
     entries: Vec<Entry>,
     photos: Vec<Photo>,
+    reminders: Vec<Reminder>,
 }
 
 #[async_trait::async_trait]
@@ -32,9 +33,19 @@ impl ChronologyRepository for MemoryChronologyRepository {
         Ok(())
     }
 
+    async fn save_reminder(&mut self, reminder: Reminder) -> Result<(), String> {
+        if let Some(pos) = self.reminders.iter().position(|r| r.id == reminder.id) {
+            self.reminders[pos] = reminder;
+        } else {
+            self.reminders.push(reminder);
+        }
+        Ok(())
+    }
+
     async fn delete_entry(&mut self, id: EntryId) -> Result<(), String> {
         self.entries.retain(|e| e.id != id);
         self.photos.retain(|p| p.entry_id != id);
+        self.reminders.retain(|r| r.entry_id != id);
         Ok(())
     }
 
@@ -66,6 +77,19 @@ impl ChronologyRepository for MemoryChronologyRepository {
             .cloned()
             .collect();
         Ok(entry_photos)
+    }
+
+    async fn entry_reminders(&self, entry_id: EntryId) -> Result<Vec<Reminder>, String> {
+        let entry_reminders = self.reminders
+            .iter()
+            .filter(|r| r.entry_id == entry_id)
+            .cloned()
+            .collect();
+        Ok(entry_reminders)
+    }
+
+    async fn reminders(&self) -> Result<Vec<Reminder>, String> {
+        Ok(self.reminders.clone())
     }
 }
 

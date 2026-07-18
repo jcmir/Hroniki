@@ -12,6 +12,7 @@
   let categories = $state<any[]>([]);
   let objects = $state<any[]>([]);
   let entries = $state<any[]>([]);
+  let reminders = $state<any[]>([]);
 
   // Browser-only mockup fallback database
   let mockCategories = [
@@ -149,6 +150,18 @@
         }
         return null as T;
       }
+      if (cmd === 'create_reminder') {
+        return `mock-reminder-${Math.random()}` as T;
+      }
+      if (cmd === 'get_reminders') {
+        return [] as T;
+      }
+      if (cmd === 'complete_reminder') {
+        return null as T;
+      }
+      if (cmd === 'snooze_reminder') {
+        return null as T;
+      }
       return null as T;
     }
   }
@@ -217,6 +230,14 @@
         });
       }
       entries = loadedEntries;
+
+      // Load reminders
+      try {
+        const rawReminders = await safeInvoke<any[]>('get_reminders');
+        reminders = rawReminders;
+      } catch (_) {
+        reminders = [];
+      }
     } catch (e) {
       console.error('Failed to load data from database:', e);
     }
@@ -250,20 +271,57 @@
         }
       }
 
-      await safeInvoke('create_entry', {
+      const entryId = await safeInvoke<string>('create_entry', {
         objectId: selectedObject,
         title: newEntryTitle,
         description: newEntryDesc || null,
         imageFilenames: savedFilenames
       });
 
+      // Schedule reminder if toggle is enabled
+      if (notifyToggle && entryId) {
+        const daysMap: Record<string, number> = {
+          'Через 14 дней': 14,
+          'Через 7 дней': 7,
+          'Завтра': 1
+        };
+        const days = daysMap[reminderPeriod] ?? 14;
+        const triggerAt = new Date();
+        triggerAt.setDate(triggerAt.getDate() + days);
+
+        await safeInvoke('create_reminder', {
+          entryId,
+          triggerAt: triggerAt.toISOString(),
+          repeatDays: days
+        });
+      }
+
       showAddModal = false;
       newEntryTitle = '';
       newEntryDesc = '';
+      notifyToggle = false;
       selectedPhotoPaths = [];
       await refreshData();
     } catch (e) {
       console.error('Failed to save entry:', e);
+    }
+  }
+
+  async function handleCompleteReminder(reminderId: string) {
+    try {
+      await safeInvoke('complete_reminder', { reminderId });
+      await refreshData();
+    } catch (e) {
+      console.error('Failed to complete reminder:', e);
+    }
+  }
+
+  async function handleSnoozeReminder(reminderId: string) {
+    try {
+      await safeInvoke('snooze_reminder', { reminderId, days: 3 });
+      await refreshData();
+    } catch (e) {
+      console.error('Failed to snooze reminder:', e);
     }
   }
   function handleCardClick(id: string) {
@@ -390,7 +448,7 @@
               <span class="stat-label">Фото</span>
             </div>
             <div class="stat-card">
-              <span class="stat-value">0</span>
+              <span class="stat-value">{reminders.filter(r => r.status === 'Scheduled' || r.status === 'Snoozed').length}</span>
               <span class="stat-label">Напоминаний</span>
             </div>
           </div>
@@ -413,10 +471,63 @@
         {/if}
       </section>
     {:else if activeTab === 'reminders'}
-      <section class="empty-tab" in:fade={{ duration: 200 }}>
-        <div class="empty-illustration">🔔</div>
-        <h3>Нет активных напоминаний</h3>
-        <p>Вы можете добавить напоминание при создании новой записи.</p>
+      <section class="reminders-section" in:fade={{ duration: 200 }}>
+        <h2 class="section-title">Напоминания</h2>
+        {#if reminders.length === 0}
+          <div class="empty-tab">
+            <div class="empty-illustration">🔔</div>
+            <h3>Нет активных напоминаний</h3>
+            <p>Добавьте напоминание при создании записи — включите переключатель «Напомнить».</p>
+          </div>
+        {:else}
+          <div class="reminders-list">
+            {#each reminders as reminder (reminder.id)}
+              {@const entry = entries.find(e => e.id === reminder.entry_id)}
+              {@const triggerDate = new Date(reminder.trigger_at)}
+              {@const isOverdue = triggerDate < new Date() && reminder.status === 'Scheduled'}
+              <div class="reminder-card {reminder.status === 'Completed' ? 'completed' : ''} {isOverdue ? 'overdue' : ''}">
+                <div class="reminder-icon">
+                  {#if reminder.status === 'Completed'}
+                    ✅
+                  {:else if isOverdue}
+                    🔴
+                  {:else}
+                    🔔
+                  {/if}
+                </div>
+                <div class="reminder-body">
+                  <span class="reminder-title">{entry ? entry.content.split('\n')[0] : 'Запись удалена'}</span>
+                  <span class="reminder-meta">
+                    {#if reminder.status === 'Completed'}
+                      Выполнено
+                    {:else if reminder.status === 'Snoozed'}
+                      Отложено до {triggerDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                    {:else}
+                      {isOverdue ? 'Просрочено: ' : 'Напомнить '}{triggerDate.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}
+                    {/if}
+                    {#if reminder.repeat_days}
+                      · Повтор каждые {reminder.repeat_days} дней
+                    {/if}
+                  </span>
+                </div>
+                {#if reminder.status !== 'Completed'}
+                  <div class="reminder-actions">
+                    <button
+                      type="button"
+                      class="reminder-btn done"
+                      onclick={() => handleCompleteReminder(reminder.id)}
+                    >Выполнено</button>
+                    <button
+                      type="button"
+                      class="reminder-btn snooze"
+                      onclick={() => handleSnoozeReminder(reminder.id)}
+                    >Отложить</button>
+                  </div>
+                {/if}
+              </div>
+            {/each}
+          </div>
+        {/if}
       </section>
     {:else if activeTab === 'settings'}
       <section class="settings-section" in:fade={{ duration: 200 }}>
@@ -881,6 +992,98 @@
     font-weight: 700;
     margin-bottom: 16px;
     color: var(--text);
+  }
+
+  .reminders-section {
+    width: 100%;
+    max-width: 480px;
+    padding: 16px 20px;
+  }
+
+  .reminders-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .reminder-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: var(--surface-opaque);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    box-shadow: var(--card-shadow);
+    border-left: 4px solid var(--primary-purple);
+    transition: opacity 0.2s;
+  }
+
+  .reminder-card.completed {
+    border-left-color: #a3d9a5;
+    opacity: 0.65;
+  }
+
+  .reminder-card.overdue {
+    border-left-color: #e05c5c;
+  }
+
+  .reminder-icon {
+    font-size: 1.4rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .reminder-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .reminder-title {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .reminder-meta {
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+
+  .reminder-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .reminder-btn {
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 6px 12px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.15s, opacity 0.15s;
+  }
+
+  .reminder-btn:hover {
+    transform: scale(1.04);
+  }
+
+  .reminder-btn.done {
+    background: var(--primary-purple);
+    color: #fff;
+  }
+
+  .reminder-btn.snooze {
+    background: rgba(96, 37, 255, 0.08);
+    color: var(--primary-purple);
   }
 
   .empty-label {
