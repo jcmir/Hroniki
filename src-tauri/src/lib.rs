@@ -21,6 +21,9 @@ pub fn run() {
             let app_data_dir = app.path().app_data_dir().expect("failed to get app data dir");
             std::fs::create_dir_all(&app_data_dir).expect("failed to create app data dir");
             let db_path = app_data_dir.join("chronology.sqlite");
+            if !db_path.exists() {
+                std::fs::File::create(&db_path).expect("failed to create sqlite database file");
+            }
             let db_url = format!("sqlite://{}", db_path.to_string_lossy().replace('\\', "/"));
 
             tauri::async_runtime::block_on(async move {
