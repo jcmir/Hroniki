@@ -27,5 +27,5 @@ uuid = { version = "1", features = ["v4", "serde"] }
 
 tokio = { version = "1", features = ["sync", "rt"] }
 
-sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio", "chrono", "uuid"] }
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio", "chrono", "uuid", "migrate"] }
 
