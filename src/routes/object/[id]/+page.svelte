@@ -2,6 +2,10 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { invoke } from '@tauri-apps/api/core';
+  import GlassCard from '$lib/design/GlassCard.svelte';
+  import ObjectAvatar from '$lib/design/ObjectAvatar.svelte';
+  import TimelineLine from '$lib/design/TimelineLine.svelte';
+  import DateChip from '$lib/design/DateChip.svelte';
   import '../../../app.css';
 
   interface EntryItem {
@@ -59,14 +63,14 @@
       <div class="state-box error">
         <span class="state-icon">⚠️</span>
         <p>{error || 'Объект не найден'}</p>
-        <button class="back-link-btn" on:click={handleBack}>Вернуться в Таймлайн</button>
+        <button class="back-link-btn" on:click={handleBack}>Вернуться в Ленту</button>
       </div>
     {:else}
-      <!-- Header Info Card -->
-      <section class="object-card">
+      <!-- Header Info Glass Card -->
+      <GlassCard hoverEffect={false}>
         <div class="card-header">
-          <span class="object-icon">🚗</span>
-          <div>
+          <ObjectAvatar icon={details.object.name.split(' ')[0] || '✨'} size="lg" />
+          <div class="info-block">
             <h2>{details.object.name}</h2>
             {#if details.object.description}
               <p class="desc">{details.object.description}</p>
@@ -77,36 +81,41 @@
         <div class="stats-row">
           <div class="stat-badge">
             <span class="stat-val">{details.entries_count}</span>
-            <span class="stat-lbl">Записей</span>
+            <span class="stat-lbl">Записей в хронологии</span>
           </div>
           <div class="stat-badge">
             <span class="stat-val">{details.photos_count}</span>
-            <span class="stat-lbl">Фотографий</span>
+            <span class="stat-lbl">Прикрепленных фото</span>
           </div>
         </div>
-      </section>
+      </GlassCard>
 
       <!-- History Timeline -->
       <section class="history-section">
-        <h3>История Владения и Событий</h3>
+        <h3>История Владения и Развития</h3>
 
         {#if details.entries.length === 0}
-          <p class="no-history">К этому объекту пока не привязано событий.</p>
+          <p class="no-history">К этому объекту пока не привязано хронологических событий.</p>
         {:else}
           <div class="timeline-stack">
             {#each details.entries as item (item.id)}
-              <div class="history-item">
-                <div class="item-date">
-                  {new Date(item.occurred_at).toLocaleDateString('ru-RU', {
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric'
-                  })}
+              <div class="timeline-node-wrapper">
+                <TimelineLine active={true} />
+                <div class="history-node-card">
+                  <GlassCard hoverEffect={true}>
+                    <DateChip
+                      dateStr={new Date(item.occurred_at).toLocaleDateString('ru-RU', {
+                        day: 'numeric',
+                        month: 'long',
+                        year: 'numeric'
+                      })}
+                    />
+                    <h4 class="item-title">{item.title}</h4>
+                    {#if item.description}
+                      <p class="item-desc">{item.description}</p>
+                    {/if}
+                  </GlassCard>
                 </div>
-                <h4 class="item-title">{item.title}</h4>
-                {#if item.description}
-                  <p class="item-desc">{item.description}</p>
-                {/if}
               </div>
             {/each}
           </div>
@@ -123,6 +132,7 @@
     color: var(--text-main);
     display: flex;
     flex-direction: column;
+    padding-bottom: 3rem;
   }
 
   .page-bar {
@@ -141,7 +151,7 @@
   .back-btn {
     background: none;
     border: none;
-    color: var(--accent-amber);
+    color: var(--accent-primary);
     font-size: 0.95rem;
     font-weight: 600;
     cursor: pointer;
@@ -159,31 +169,21 @@
     width: 100%;
     margin: 0 auto;
     padding: 1.5rem 1rem;
-  }
-
-  .object-card {
-    background-color: var(--bg-surface);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-lg);
-    padding: 1.25rem;
-    margin-bottom: 1.5rem;
-    box-shadow: var(--shadow-card);
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
   }
 
   .card-header {
     display: flex;
-    align-items: flex-start;
-    gap: 1rem;
-    margin-bottom: 1rem;
+    align-items: center;
+    gap: 1.25rem;
+    margin-bottom: 1.25rem;
   }
 
-  .object-icon {
-    font-size: 2.2rem;
-  }
-
-  .card-header h2 {
+  .info-block h2 {
     font-family: var(--font-heading);
-    font-size: 1.3rem;
+    font-size: 1.4rem;
     color: var(--text-main);
   }
 
@@ -195,9 +195,9 @@
 
   .stats-row {
     display: flex;
-    gap: 1rem;
+    gap: 2rem;
     border-top: 1px solid var(--border-subtle);
-    padding-top: 0.85rem;
+    padding-top: 1rem;
   }
 
   .stat-badge {
@@ -206,9 +206,9 @@
   }
 
   .stat-val {
-    font-size: 1.2rem;
+    font-size: 1.3rem;
     font-weight: 700;
-    color: var(--accent-amber);
+    color: var(--accent-primary);
   }
 
   .stat-lbl {
@@ -218,7 +218,7 @@
 
   .history-section h3 {
     font-family: var(--font-heading);
-    font-size: 1.05rem;
+    font-size: 1.15rem;
     margin-bottom: 1rem;
     color: var(--text-main);
   }
@@ -226,33 +226,30 @@
   .timeline-stack {
     display: flex;
     flex-direction: column;
-    gap: 0.85rem;
+    gap: 1rem;
   }
 
-  .history-item {
-    background-color: var(--bg-surface);
-    border-left: 3px solid var(--accent-amber);
-    border-radius: 0 var(--radius-md) var(--radius-md) 0;
-    padding: 0.85rem 1rem;
+  .timeline-node-wrapper {
+    display: flex;
+    align-items: stretch;
   }
 
-  .item-date {
-    font-size: 0.75rem;
-    color: var(--accent-amber);
-    font-weight: 600;
+  .history-node-card {
+    flex: 1;
   }
 
   .item-title {
-    font-size: 0.95rem;
+    font-family: var(--font-heading);
+    font-size: 1.05rem;
     font-weight: 600;
     color: var(--text-main);
-    margin-top: 0.2rem;
   }
 
   .item-desc {
-    font-size: 0.85rem;
+    font-size: 0.875rem;
     color: var(--text-muted);
-    margin-top: 0.3rem;
+    margin-top: 0.35rem;
+    line-height: 1.4;
   }
 
   .state-box {
@@ -269,7 +266,7 @@
     width: 32px;
     height: 32px;
     border: 3px solid var(--border-subtle);
-    border-top-color: var(--accent-amber);
+    border-top-color: var(--accent-primary);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
     margin-bottom: 1rem;
@@ -288,9 +285,9 @@
 
   .back-link-btn {
     margin-top: 1rem;
-    background-color: var(--accent-amber);
+    background-color: var(--accent-primary);
     border: none;
-    color: #000;
+    color: #FFF;
     font-weight: 600;
     padding: 0.6rem 1.2rem;
     border-radius: var(--radius-pill);

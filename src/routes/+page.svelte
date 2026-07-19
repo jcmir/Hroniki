@@ -5,15 +5,16 @@
   import { sessionStore } from '$lib/stores/session';
   import { platformStore } from '$lib/stores/platform';
   import { categoriesStore } from '$lib/stores/categories';
-  import EntryCard from '$lib/components/EntryCard.svelte';
   import CreateEntryModal from '$lib/components/CreateEntryModal.svelte';
   import PINLockModal from '$lib/components/PINLockModal.svelte';
   import FilterBar from '$lib/components/FilterBar.svelte';
   import MemoryRepeatBanner from '$lib/components/MemoryRepeatBanner.svelte';
-  import SettingsModal from '$lib/components/SettingsModal.svelte';
+  import DateChip from '$lib/design/DateChip.svelte';
+  import TimelineEntry from '$lib/design/TimelineEntry.svelte';
+  import EmptyState from '$lib/design/EmptyState.svelte';
+  import FloatingActionButton from '$lib/design/FloatingActionButton.svelte';
 
   let showCreateModal = false;
-  let showSettingsModal = false;
 
   onMount(async () => {
     await sessionStore.init();
@@ -28,25 +29,23 @@
 </script>
 
 <div class="journal-app">
-  <!-- Top Mobile Bar -->
+  <!-- Top Bar -->
   <header class="app-bar">
     <div class="bar-title">
       <span class="brand-icon">📖</span>
       <div class="brand-text">
         <h1>ХРОНИКИ</h1>
-        <span class="sub-text">Личный Дневник Воспоминаний</span>
+        <span class="sub-text">Архив Воспоминаний</span>
       </div>
       <span class="version-chip">Beta 0.2.0</span>
     </div>
 
-    <div class="bar-actions">
-      <button class="lock-action-btn" title="Настройки" on:click={() => (showSettingsModal = true)}>
-        ⚙️
-      </button>
-      <button class="lock-action-btn" title="Заблокировать" on:click={handleLockApp}>
-        🔒
-      </button>
-    </div>
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs">
+      <a href="/" class="tab-link active">Лента</a>
+      <a href="/objects" class="tab-link">Объекты</a>
+      <a href="/settings" class="tab-link">Настройки</a>
+    </nav>
   </header>
 
   <!-- Main Timeline Container -->
@@ -68,26 +67,20 @@
         <p>Загрузка хроник...</p>
       </div>
     {:else if $entriesByDate.length === 0}
-      <div class="state-container empty-state">
-        <div class="empty-icon">✨</div>
-        <h3>Ваш Дневник Пока Пуст</h3>
-        <p>Сохраняйте ценные моменты, объекты и фотографии. Нажмите <strong>+</strong>, чтобы добавить первое воспоминание.</p>
-        <button class="first-entry-btn" on:click={() => (showCreateModal = true)}>
-          + Создать Запись
-        </button>
-      </div>
+      <EmptyState
+        title="Ваш Дневник Пока Пуст"
+        description="Сохраняйте ценные моменты, жизненные объекты и фотографии."
+        on:action={() => (showCreateModal = true)}
+      />
     {:else}
       <div class="timeline-list">
         {#each $entriesByDate as group (group.date)}
           <section class="date-group">
-            <h2 class="date-header">
-              <span class="calendar-icon">📅</span>
-              {group.date}
-            </h2>
+            <DateChip dateStr={group.date} />
 
             <div class="entries-stack">
               {#each group.items as entry (entry.id)}
-                <EntryCard {entry} />
+                <TimelineEntry {entry} />
               {/each}
             </div>
           </section>
@@ -96,22 +89,11 @@
     {/if}
   </main>
 
-  <!-- Floating Action Button (FAB) -->
-  <button
-    class="fab-btn"
-    aria-label="Создать новое воспоминание"
-    on:click={() => (showCreateModal = true)}
-  >
-    <span class="fab-icon">+</span>
-  </button>
+  <FloatingActionButton on:click={() => (showCreateModal = true)} />
 
   <!-- Modals -->
   {#if showCreateModal}
     <CreateEntryModal on:close={() => (showCreateModal = false)} />
-  {/if}
-
-  {#if showSettingsModal}
-    <SettingsModal on:close={() => (showSettingsModal = false)} />
   {/if}
 
   {#if $sessionStore.isLocked}
@@ -146,18 +128,17 @@
   .bar-title {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.6rem;
   }
 
   .brand-icon {
-    font-size: 1.6rem;
+    font-size: 1.5rem;
   }
 
   .brand-text h1 {
     font-family: var(--font-heading);
-    font-size: 1.2rem;
+    font-size: 1.15rem;
     font-weight: 700;
-    letter-spacing: 0.04em;
     color: var(--text-main);
     line-height: 1.1;
   }
@@ -167,24 +148,40 @@
     color: var(--text-muted);
   }
 
-  .bar-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+  .version-chip {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--accent-primary);
+    background-color: rgba(124, 58, 237, 0.1);
+    border: 1px solid var(--border-accent);
+    padding: 0.15rem 0.5rem;
+    border-radius: var(--radius-pill);
+    margin-left: 0.4rem;
   }
 
-  .lock-action-btn {
-    background: var(--bg-surface);
-    border: 1px solid var(--border-subtle);
-    color: var(--text-main);
-    width: 40px;
-    height: 40px;
-    border-radius: var(--radius-pill);
-    font-size: 1rem;
-    cursor: pointer;
+  .nav-tabs {
     display: flex;
-    justify-content: center;
-    align-items: center;
+    gap: 0.4rem;
+    background-color: rgba(23, 23, 23, 0.05);
+    padding: 0.2rem;
+    border-radius: var(--radius-pill);
+  }
+
+  .tab-link {
+    text-decoration: none;
+    font-size: 0.825rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    padding: 0.35rem 0.85rem;
+    border-radius: var(--radius-pill);
+    transition: all 0.2s ease;
+  }
+
+  .tab-link.active {
+    background-color: #FFF;
+    color: var(--accent-primary);
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   }
 
   .timeline-content {
@@ -195,82 +192,29 @@
     padding: 1.25rem 1rem;
   }
 
-  .state-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 4rem 1.5rem;
-    color: var(--text-muted);
-  }
-
-  .empty-state {
-    background-color: var(--bg-surface);
-    border: 1px dashed var(--border-subtle);
-    border-radius: var(--radius-lg);
-    margin-top: 1rem;
-  }
-
-  .empty-icon {
-    font-size: 3rem;
-    margin-bottom: 1rem;
-  }
-
-  .empty-state h3 {
-    font-family: var(--font-heading);
-    font-size: 1.25rem;
-    color: var(--text-main);
-    margin-bottom: 0.5rem;
-  }
-
-  .empty-state p {
-    font-size: 0.9rem;
-    line-height: 1.5;
-    margin-bottom: 1.5rem;
-    max-width: 380px;
-  }
-
-  .first-entry-btn {
-    background-color: var(--accent-amber);
-    border: none;
-    color: #000;
-    font-weight: 600;
-    padding: 0.75rem 1.5rem;
-    border-radius: var(--radius-pill);
-    cursor: pointer;
-  }
-
   .date-group {
-    margin-bottom: 2rem;
-  }
-
-  .date-header {
-    font-family: var(--font-heading);
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--accent-amber);
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.85rem;
-    text-transform: capitalize;
-  }
-
-  .calendar-icon {
-    font-size: 0.95rem;
+    margin-bottom: 1.75rem;
   }
 
   .entries-stack {
     display: flex;
     flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  .state-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 4rem 1rem;
+    color: var(--text-muted);
   }
 
   .spinner {
     width: 32px;
     height: 32px;
     border: 3px solid var(--border-subtle);
-    border-top-color: var(--accent-amber);
+    border-top-color: var(--accent-primary);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
     margin-bottom: 1rem;
@@ -280,46 +224,5 @@
     to {
       transform: rotate(360deg);
     }
-  }
-
-  /* Floating Action Button */
-  .fab-btn {
-    position: fixed;
-    bottom: 2rem;
-    right: 1.5rem;
-    z-index: 90;
-    width: 60px;
-    height: 60px;
-    border-radius: var(--radius-pill);
-    background: linear-gradient(135deg, var(--accent-amber), #d97706);
-    border: none;
-    color: #000;
-    box-shadow: var(--shadow-card), var(--shadow-glow);
-    cursor: pointer;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    transition: transform 0.2s ease;
-  }
-
-  .fab-btn:hover {
-    transform: scale(1.06);
-  }
-
-  .fab-icon {
-    font-size: 2rem;
-    font-weight: 300;
-    line-height: 1;
-  }
-
-  .version-chip {
-    font-size: 0.7rem;
-    font-weight: 600;
-    color: var(--accent-amber);
-    background-color: var(--accent-amber-glow);
-    border: 1px solid var(--border-accent);
-    padding: 0.15rem 0.5rem;
-    border-radius: var(--radius-pill);
-    margin-left: 0.5rem;
   }
 </style>

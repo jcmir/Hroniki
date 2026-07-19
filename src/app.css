@@ -1,31 +1,35 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap');
 
 :root {
-  --bg-app: #0d0f12;
-  --bg-surface: #161920;
-  --bg-surface-elevated: #1e222d;
-  --bg-glass: rgba(22, 25, 32, 0.85);
+  --bg-app: #FCF7FA;
+  --bg-surface: rgba(255, 255, 255, 0.76);
+  --bg-surface-elevated: #FFFFFF;
+  --bg-glass: rgba(255, 255, 255, 0.88);
+  --bg-backdrop: rgba(23, 23, 23, 0.4);
   
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-accent: rgba(245, 158, 11, 0.25);
+  --border-subtle: rgba(255, 255, 255, 0.6);
+  --border-accent: rgba(124, 58, 237, 0.25);
   
-  --text-main: #f3f4f6;
-  --text-muted: #9ca3af;
-  --text-subtle: #6b7280;
+  --text-main: #171717;
+  --text-muted: #737373;
+  --text-subtle: #A3A3A3;
   
-  --accent-amber: #f59e0b;
+  --accent-primary: #7C3AED;
+  --accent-pink: #EC4899;
+  --accent-amber: #F59E0B;
   --accent-amber-glow: rgba(245, 158, 11, 0.15);
-  --accent-sapphire: #3b82f6;
-  --accent-crimson: #ef4444;
-  --accent-emerald: #10b981;
+  --accent-blue: #3B82F6;
+  --accent-green: #10B981;
   
-  --radius-sm: 10px;
+  --radius-card: 24px;
+  --radius-sm: 12px;
   --radius-md: 16px;
   --radius-lg: 24px;
   --radius-pill: 9999px;
   
-  --shadow-card: 0 12px 32px rgba(0, 0, 0, 0.35);
-  --shadow-glow: 0 0 24px rgba(245, 158, 11, 0.2);
+  --shadow-soft: 0 8px 32px rgba(124, 58, 237, 0.08);
+  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.04);
+  --shadow-glow: 0 0 24px rgba(124, 58, 237, 0.2);
   
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-heading: 'Outfit', var(--font-sans);
@@ -58,11 +62,11 @@ html, body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(124, 58, 237, 0.2);
   border-radius: var(--radius-pill);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(124, 58, 237, 0.4);
 }
 
 /* Touch active states */
