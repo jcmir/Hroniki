@@ -67,6 +67,18 @@ pub async fn seed_demo_data(state: State<'_, AppState>) -> Result<(), String> {
     let service = state.service.lock().await;
     let pool = service.repository().pool();
 
+    // Check if onboarding is already completed to prevent accidental data loss
+    let row: Option<(String,)> = sqlx::query_as("SELECT value FROM app_metadata WHERE key = 'onboarding_completed'")
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if let Some((val,)) = row {
+        if val == "true" {
+            return Err("Demo seeding is only allowed during onboarding".to_string());
+        }
+    }
+
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
     // 1. Clear old data to prevent key conflicts
@@ -195,5 +207,31 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(name_row.0, "Александр");
+    }
+
+    #[tokio::test]
+    async fn test_onboarding_demo_seed_protection() {
+        let pool = create_pool("sqlite::memory:").await.unwrap();
+        run_migrations(&pool).await.unwrap();
+
+        // 1. Verify initially we can seed (no onboarding_completed key)
+        let row: Option<(String,)> = sqlx::query_as("SELECT value FROM app_metadata WHERE key = 'onboarding_completed'")
+            .fetch_optional(&pool)
+            .await
+            .unwrap();
+        assert!(row.is_none());
+
+        // 2. Set onboarding_completed to true
+        sqlx::query("INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('onboarding_completed', 'true')")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        // 3. Verify that onboarding_completed is indeed true, which would reject seeding
+        let row_completed: (String,) = sqlx::query_as("SELECT value FROM app_metadata WHERE key = 'onboarding_completed'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(row_completed.0, "true");
     }
 }
