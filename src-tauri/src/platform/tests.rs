@@ -1098,7 +1098,7 @@ async fn test_full_mobile_lifecycle() {
 
     let photos = repo2.entry_photos(entries[0].id).await.unwrap();
     assert_eq!(photos.len(), 1);
-    assert_eq!(photos[0].source, MediaSource::Gallery);
+    assert_eq!(photos[0].source, MediaSource::ImportedFile);
 
     pool2.close().await;
 }
