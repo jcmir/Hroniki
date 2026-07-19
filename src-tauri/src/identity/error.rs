@@ -5,6 +5,7 @@ pub enum IdentityError {
     InvalidPassword,
     InvalidRecoveryKey,
     Storage(String),
+    Crypto(String),
 }
 
 impl std::fmt::Display for IdentityError {

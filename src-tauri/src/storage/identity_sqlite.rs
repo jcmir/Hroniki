@@ -46,7 +46,8 @@ impl IdentityRepository for SqliteIdentityRepository {
             let display_name: Option<String> = r.try_get("display_name").map_err(|e| IdentityError::Storage(e.to_string()))?;
             let created_at_str: String = r.try_get("created_at").map_err(|e| IdentityError::Storage(e.to_string()))?;
             
-            let created_at = created_at_str.parse().unwrap_or_else(|_| Utc::now());
+            let created_at = created_at_str.parse()
+                .map_err(|e| IdentityError::Storage(format!("Invalid date format: {}", e)))?;
 
             Ok(Some(User {
                 id,
@@ -87,7 +88,8 @@ impl IdentityRepository for SqliteIdentityRepository {
             let password_hash: String = r.try_get("password_hash").map_err(|e| IdentityError::Storage(e.to_string()))?;
             let created_at_str: String = r.try_get("created_at").map_err(|e| IdentityError::Storage(e.to_string()))?;
             
-            let created_at = created_at_str.parse().unwrap_or_else(|_| Utc::now());
+            let created_at = created_at_str.parse()
+                .map_err(|e| IdentityError::Storage(format!("Invalid date format: {}", e)))?;
 
             Ok(Some((
                 User {
@@ -186,7 +188,8 @@ impl IdentityRepository for SqliteIdentityRepository {
             let device_name: Option<String> = r.try_get("device_name").map_err(|e| IdentityError::Storage(e.to_string()))?;
             let created_at_str: String = r.try_get("created_at").map_err(|e| IdentityError::Storage(e.to_string()))?;
             
-            let created_at = created_at_str.parse().unwrap_or_else(|_| Utc::now());
+            let created_at = created_at_str.parse()
+                .map_err(|e| IdentityError::Storage(format!("Invalid date format: {}", e)))?;
 
             Ok(Some(Session {
                 id,

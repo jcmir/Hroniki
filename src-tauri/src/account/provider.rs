@@ -62,7 +62,7 @@ impl AccountProvider for LocalAccountProvider {
 
         let user_id = Uuid::new_v4().to_string();
         let password_hash = crate::security::password::hash_password(password)
-            .map_err(|e| IdentityError::Storage(e))?;
+            .map_err(|e| IdentityError::Crypto(e))?;
 
         let user = User {
             id: user_id,
@@ -87,7 +87,7 @@ impl AccountProvider for LocalAccountProvider {
         };
 
         let is_valid = crate::security::password::verify_password(password, &password_hash)
-            .map_err(|e| IdentityError::Storage(e))?;
+            .map_err(|e| IdentityError::Crypto(e))?;
 
         if !is_valid {
             return Err(IdentityError::InvalidPassword);
