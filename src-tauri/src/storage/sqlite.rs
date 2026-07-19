@@ -586,6 +586,78 @@ impl ChronologyRepository for SqliteChronologyRepository {
 
         Ok(result)
     }
+
+    async fn search_entries(
+        &self,
+        query_text: Option<String>,
+        category_id: Option<String>,
+        object_id: Option<String>,
+        start_date: Option<String>,
+        end_date: Option<String>
+    ) -> Result<Vec<Entry>, String> {
+        let text_filter = query_text.map(|q| format!("%{}%", q));
+        
+        let rows = sqlx::query(
+            r#"
+            SELECT
+                e.id,
+                e.object_id,
+                e.occurred_at,
+                e.title,
+                e.description,
+                e.created_at,
+                e.updated_at
+            FROM entries e
+            JOIN objects o ON e.object_id = o.id
+            WHERE (?1 IS NULL OR e.title LIKE ?1 OR e.description LIKE ?1)
+              AND (?2 IS NULL OR o.category_id = ?2)
+              AND (?3 IS NULL OR e.object_id = ?3)
+              AND (?4 IS NULL OR e.occurred_at >= ?4)
+              AND (?5 IS NULL OR e.occurred_at <= ?5)
+            ORDER BY e.occurred_at DESC
+            "#,
+        )
+        .bind(text_filter)
+        .bind(category_id)
+        .bind(object_id)
+        .bind(start_date)
+        .bind(end_date)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|error| error.to_string())?;
+
+        let mut result = Vec::new();
+
+        for row in rows {
+            let id: String = row.try_get("id").map_err(|e| e.to_string())?;
+            let object_id_str: String = row.try_get("object_id").map_err(|e| e.to_string())?;
+            let occurred_at: String = row.try_get("occurred_at").map_err(|e| e.to_string())?;
+            let title: String = row.try_get("title").map_err(|e| e.to_string())?;
+            let description: Option<String> = row.try_get("description").map_err(|e| e.to_string())?;
+            let created_at: String = row.try_get("created_at").map_err(|e| e.to_string())?;
+            let updated_at: String = row.try_get("updated_at").map_err(|e| e.to_string())?;
+
+            result.push(Entry {
+                id: EntryId::from(uuid::Uuid::parse_str(&id).map_err(|e| e.to_string())?),
+                object_id: ChronicleObjectId::from(
+                    uuid::Uuid::parse_str(&object_id_str).map_err(|e| e.to_string())?,
+                ),
+                occurred_at: DateTime::parse_from_rfc3339(&occurred_at)
+                    .map_err(|e| e.to_string())?
+                    .with_timezone(&Utc),
+                title,
+                description,
+                created_at: DateTime::parse_from_rfc3339(&created_at)
+                    .map_err(|e| e.to_string())?
+                    .with_timezone(&Utc),
+                updated_at: DateTime::parse_from_rfc3339(&updated_at)
+                    .map_err(|e| e.to_string())?
+                    .with_timezone(&Utc),
+            });
+        }
+
+        Ok(result)
+    }
 }
 
 #[cfg(test)]
@@ -819,6 +891,34 @@ mod tests {
             .unwrap();
 
         assert_eq!(update_res_again.rows_affected(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_search_entries() {
+        let pool = create_pool("sqlite::memory:").await.unwrap();
+        run_migrations(&pool).await.unwrap();
+        let mut repository = SqliteChronologyRepository::new(pool);
+
+        let category = Category::new("Garden").unwrap();
+        repository.save_category(category.clone()).await.unwrap();
+
+        let object = ChronicleObject::new(category.id, "Apple tree", None).unwrap();
+        repository.save_object(object.clone()).await.unwrap();
+
+        let entry1 = Entry::new(object.id, Utc::now() - chrono::Duration::days(2), "Sprayed fungicide", Some("Detailed info about spray".to_string())).unwrap();
+        let entry2 = Entry::new(object.id, Utc::now(), "Watered the tree", None).unwrap();
+
+        repository.save_entry(entry1.clone()).await.unwrap();
+        repository.save_entry(entry2.clone()).await.unwrap();
+
+        // 1. Search by text (should match entry1)
+        let results = repository.search_entries(Some("spray".to_string()), None, None, None, None).await.unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].title, "Sprayed fungicide");
+
+        // 2. Search by object_id
+        let results = repository.search_entries(None, None, Some(object.id.value().to_string()), None, None).await.unwrap();
+        assert_eq!(results.len(), 2);
     }
 }
 

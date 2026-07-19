@@ -29,4 +29,13 @@ pub trait ChronologyRepository {
     async fn entry_reminders(&self, entry_id: EntryId) -> Result<Vec<Reminder>, String>;
 
     async fn reminders(&self) -> Result<Vec<Reminder>, String>;
+
+    async fn search_entries(
+        &self,
+        query_text: Option<String>,
+        category_id: Option<String>,
+        object_id: Option<String>,
+        start_date: Option<String>,
+        end_date: Option<String>
+    ) -> Result<Vec<Entry>, String>;
 }

@@ -70,7 +70,21 @@
   let reminderPeriod = $state('Через 14 дней');
   
   // Selected photos paths (absolute paths before saving)
+  // Selected photos paths (absolute paths before saving)
   let selectedPhotoPaths = $state<string[]>([]);
+
+  // Search & Filter state
+  let searchQueryText = $state('');
+  let searchCategory = $state('');
+  let searchObject = $state('');
+  let searchStartDate = $state('');
+  let searchEndDate = $state('');
+  let showFiltersPanel = $state(false);
+
+  // Selected object chronicle view state
+  let selectedObjectForChronicle = $state<any>(null);
+  let selectedObjectStats = $state<any>(null);
+  let selectedObjectEntries = $state<any[]>([]);
 
   onMount(async () => {
     await refreshData();
@@ -95,6 +109,28 @@
       if (cmd === 'get_entry_photos') {
         const customPhotos = mockPhotosMap.get(args.entryId) || [];
         return customPhotos as T;
+      }
+      if (cmd === 'search_entries') {
+        let results = [...mockEntries];
+        if (args.queryText) {
+          const q = args.queryText.toLowerCase();
+          results = results.filter(e => e.title.toLowerCase().includes(q) || (e.description && e.description.toLowerCase().includes(q)));
+        }
+        if (args.objectId) {
+          results = results.filter(e => e.object_id === args.objectId);
+        }
+        return results as T;
+      }
+      if (cmd === 'get_object_stats') {
+        const objEntries = mockEntries.filter(e => e.object_id === args.objectId);
+        return {
+          age_days: 12,
+          total_entries: objEntries.len || objEntries.length,
+          total_photos: objEntries.length,
+          last_event_title: objEntries[0] ? objEntries[0].title : null,
+          last_event_date: objEntries[0] ? objEntries[0].occurred_at : null,
+          next_reminder_date: new Date(Date.now() + 86400000 * 14).toISOString()
+        } as T;
       }
       if (cmd === 'create_object') {
         const newObj = {
@@ -130,11 +166,9 @@
         return newEnt.id as T;
       }
       if (cmd === 'select_images') {
-        // Return a mock local image file path for browser environment demo
         return ['/garden_tomatoes.png'] as T;
       }
       if (cmd === 'save_media') {
-        // Return the source path directly as the filename in web fallback mode
         return args.sourcePath as T;
       }
       if (cmd === 'delete_entry') {
@@ -166,6 +200,22 @@
     }
   }
 
+  async function selectObjectForChronicle(obj: any) {
+    selectedObjectForChronicle = obj;
+    try {
+      selectedObjectStats = await safeInvoke<any>('get_object_stats', { objectId: obj.id });
+      selectedObjectEntries = entries.filter(e => e.object_id === obj.id);
+    } catch (e) {
+      console.error('Failed to get object stats:', e);
+    }
+  }
+
+  function clearObjectChronicle() {
+    selectedObjectForChronicle = null;
+    selectedObjectStats = null;
+    selectedObjectEntries = [];
+  }
+
   async function refreshData() {
     try {
       categories = await safeInvoke<any[]>('get_categories');
@@ -187,7 +237,20 @@
         selectedObject = objects[0].id;
       }
 
-      const rawEntries = await safeInvoke<any[]>('get_entries');
+      // Query entries using search command or standard get_entries
+      let rawEntries = [];
+      if (searchQueryText || searchCategory || searchObject || searchStartDate || searchEndDate) {
+        rawEntries = await safeInvoke<any[]>('search_entries', {
+          queryText: searchQueryText || null,
+          categoryId: searchCategory || null,
+          objectId: searchObject || null,
+          startDate: searchStartDate ? new Date(searchStartDate).toISOString() : null,
+          endDate: searchEndDate ? new Date(searchEndDate).toISOString() : null
+        });
+      } else {
+        rawEntries = await safeInvoke<any[]>('get_entries');
+      }
+
       const loadedEntries = [];
 
       for (const e of rawEntries) {
@@ -219,6 +282,8 @@
 
         loadedEntries.push({
           id: e.id,
+          object_id: e.object_id,
+          occurred_at: e.occurred_at,
           categoryName: catName,
           categoryIcon: catName === 'Сад' ? '🌱' : catName === 'Здоровье' ? '❤️' : catName === 'Авто' ? '🚗' : '✨',
           categoryTheme: themeMap[catName] || 'purple',
@@ -237,6 +302,10 @@
         reminders = rawReminders;
       } catch (_) {
         reminders = [];
+      }
+
+      if (selectedObjectForChronicle) {
+        selectedObjectEntries = entries.filter(e => e.object_id === selectedObjectForChronicle.id);
       }
     } catch (e) {
       console.error('Failed to load data from database:', e);
@@ -365,18 +434,14 @@
       <h1>ХРОНИКИ</h1>
     </div>
     <div class="header-actions">
-      <button type="button" class="icon-btn" aria-label="Search">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+      <button
+        type="button"
+        class="icon-btn {showFiltersPanel ? 'active' : ''}"
+        aria-label="Search and filters"
+        onclick={() => showFiltersPanel = !showFiltersPanel}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width: 20px; height: 20px;">
           <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-      </button>
-      <button type="button" class="icon-btn" aria-label="Filters">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/>
-          <line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/>
-          <line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/>
-          <line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/>
-          <line x1="17" y1="16" x2="23" y2="16"/>
         </svg>
       </button>
     </div>
@@ -385,8 +450,66 @@
   <!-- Content view -->
   <div class="content-viewport">
     {#if activeTab === 'feed'}
-      <!-- Feed Tab: Date Selector & Timeline -->
+      <!-- Feed Tab: Search, Date Selector & Timeline -->
       <section class="feed-section" in:fade={{ duration: 200 }}>
+        
+        <!-- Interactive Search & Filters Panel -->
+        {#if showFiltersPanel}
+          <div class="search-filters-panel" transition:slide={{ duration: 200 }}>
+            <div class="search-input-wrapper">
+              <input
+                type="text"
+                class="search-text-input"
+                placeholder="Поиск по событиям и описанию..."
+                bind:value={searchQueryText}
+                oninput={refreshData}
+              />
+            </div>
+            <div class="filter-dropdowns-row">
+              <div class="filter-col">
+                <label class="filter-label" for="filter-category">Категория</label>
+                <select id="filter-category" class="filter-select" bind:value={searchCategory} onchange={refreshData}>
+                  <option value="">Все категории</option>
+                  {#each categories as cat}
+                    <option value={cat.id}>{cat.name}</option>
+                  {/each}
+                </select>
+              </div>
+              <div class="filter-col">
+                <label class="filter-label" for="filter-object">Объект</label>
+                <select id="filter-object" class="filter-select" bind:value={searchObject} onchange={refreshData}>
+                  <option value="">Все объекты</option>
+                  {#each objects as obj}
+                    <option value={obj.id}>{obj.name}</option>
+                  {/each}
+                </select>
+              </div>
+            </div>
+            <div class="filter-dates-row">
+              <div class="filter-col">
+                <label class="filter-label" for="filter-start">С даты</label>
+                <input id="filter-start" type="date" class="filter-date-input" bind:value={searchStartDate} onchange={refreshData} />
+              </div>
+              <div class="filter-col">
+                <label class="filter-label" for="filter-end">По дату</label>
+                <input id="filter-end" type="date" class="filter-date-input" bind:value={searchEndDate} onchange={refreshData} />
+              </div>
+            </div>
+            <button
+              type="button"
+              class="clear-filters-btn"
+              onclick={() => {
+                searchQueryText = '';
+                searchCategory = '';
+                searchObject = '';
+                searchStartDate = '';
+                searchEndDate = '';
+                refreshData();
+              }}
+            >Очистить фильтры</button>
+          </div>
+        {/if}
+
         <!-- Horizontal Scrollable Date selector -->
         <div class="date-selector">
           {#each dates as d, idx}
@@ -415,7 +538,7 @@
           {#if entries.length === 0}
             <div class="empty-feed">
               <span class="empty-icon">📖</span>
-              <p>Хроника пуста. Нажмите на плюс внизу, чтобы добавить событие.</p>
+              <p>Ничего не найдено. Измените параметры поиска или добавьте запись.</p>
             </div>
           {:else}
             {#each entries as item (item.id)}
@@ -425,49 +548,84 @@
         </div>
       </section>
     {:else if activeTab === 'objects'}
-      <!-- Objects Tab: Object details view -->
+      <!-- Objects Tab -->
       <section class="objects-section" in:fade={{ duration: 200 }}>
-        {#if objects.length > 0}
-          <div class="object-hero">
-            <div class="object-avatar-wrapper">
-              <img src="/garden_tomatoes.png" alt="Яблоня" class="object-avatar" />
-            </div>
-            <h2 class="object-title">{objects[0].name}</h2>
-            <span class="object-category-badge">🌱 Сад</span>
-            <span class="object-meta">Успешно подключен к SQLite</span>
-          </div>
+        {#if selectedObjectForChronicle}
+          <!-- Object Chronicle Detailed View -->
+          <div class="chronicle-view" in:fade={{ duration: 150 }}>
+            <button type="button" class="back-link-btn" onclick={clearObjectChronicle}>
+              ← К списку объектов
+            </button>
 
-          <!-- Statistics -->
-          <div class="stats-row">
-            <div class="stat-card">
-              <span class="stat-value">{entries.length}</span>
-              <span class="stat-label">Записей</span>
+            <div class="object-hero">
+              <div class="object-avatar-wrapper">
+                <span class="object-avatar-emoji">🌱</span>
+              </div>
+              <h2 class="object-title">{selectedObjectForChronicle.name}</h2>
+              <span class="object-category-badge">🌱 {categories.find(c => c.id === selectedObjectForChronicle.category_id)?.name || 'Категория'}</span>
+              {#if selectedObjectStats}
+                <span class="object-meta">В архиве {selectedObjectStats.age_days} дней</span>
+              {/if}
             </div>
-            <div class="stat-card">
-              <span class="stat-value">{entries.filter(e => e.images.length > 0).length}</span>
-              <span class="stat-label">Фото</span>
-            </div>
-            <div class="stat-card">
-              <span class="stat-value">{reminders.filter(r => r.status === 'Scheduled' || r.status === 'Snoozed').length}</span>
-              <span class="stat-label">Напоминаний</span>
-            </div>
-          </div>
 
-          <h3 class="section-title">История ухода</h3>
-          <div class="timeline-container">
-            <div class="timeline-axis"></div>
-            {#if entries.length === 0}
-              <p class="empty-label">Нет записей для этого объекта.</p>
-            {:else}
-              {#each entries as item (item.id)}
-                <TimelineCard {...item} onClick={handleCardClick} />
-              {/each}
+            <!-- Statistics Cards -->
+            {#if selectedObjectStats}
+              <div class="stats-row">
+                <div class="stat-card">
+                  <span class="stat-value">{selectedObjectStats.total_entries}</span>
+                  <span class="stat-label">Событий</span>
+                </div>
+                <div class="stat-card">
+                  <span class="stat-value">{selectedObjectStats.total_photos}</span>
+                  <span class="stat-label">Фотографий</span>
+                </div>
+                <div class="stat-card">
+                  <span class="stat-value">
+                    {#if selectedObjectStats.next_reminder_date}
+                      {new Date(selectedObjectStats.next_reminder_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                    {:else}
+                      —
+                    {/if}
+                  </span>
+                  <span class="stat-label">Напоминание</span>
+                </div>
+              </div>
             {/if}
+
+            <h3 class="section-title">Временная шкала объекта</h3>
+            <div class="timeline-container">
+              <div class="timeline-axis"></div>
+              {#if selectedObjectEntries.length === 0}
+                <p class="empty-label">Нет записей для этого объекта.</p>
+              {:else}
+                {#each selectedObjectEntries as item (item.id)}
+                  <TimelineCard {...item} onClick={handleCardClick} />
+                {/each}
+              {/if}
+            </div>
           </div>
         {:else}
-          <div class="empty-tab">
-            <h3>Нет объектов</h3>
-          </div>
+          <!-- Objects List View -->
+          <h2 class="section-title">Ваши объекты</h2>
+          {#if objects.length === 0}
+            <div class="empty-tab">
+              <h3>Нет объектов</h3>
+              <p>Создайте объект через бэкенд или заполните базу.</p>
+            </div>
+          {:else}
+            <div class="objects-grid">
+              {#each objects as obj}
+                <button type="button" class="object-list-card" onclick={() => selectObjectForChronicle(obj)}>
+                  <div class="object-list-card-icon">🌱</div>
+                  <div class="object-list-card-details">
+                    <span class="object-list-card-name">{obj.name}</span>
+                    <span class="object-list-card-desc">{obj.description || 'Без описания'}</span>
+                  </div>
+                  <span class="object-list-card-arrow">→</span>
+                </button>
+              {/each}
+            </div>
+          {/if}
         {/if}
       </section>
     {:else if activeTab === 'reminders'}
@@ -1455,5 +1613,154 @@
 
   .slider.round:before {
     border-radius: 50%;
+  }
+
+  /* Search & Filter Panel */
+  .search-filters-panel {
+    background: var(--surface-opaque);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    box-shadow: var(--card-shadow);
+    margin: 8px 4px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .search-input-wrapper {
+    position: relative;
+    width: 100%;
+  }
+  .search-text-input {
+    width: 100%;
+    border: 1.5px solid var(--light-gray);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    font-size: 0.9rem;
+    font-family: var(--font-main);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .search-text-input:focus {
+    border-color: var(--primary-purple);
+  }
+  .filter-dropdowns-row, .filter-dates-row {
+    display: flex;
+    gap: 12px;
+  }
+  .filter-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .filter-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .filter-select, .filter-date-input {
+    width: 100%;
+    border: 1.5px solid var(--light-gray);
+    border-radius: 10px;
+    padding: 8px;
+    font-size: 0.85rem;
+    font-family: var(--font-main);
+    background: white;
+    outline: none;
+  }
+  .clear-filters-btn {
+    border: none;
+    background: rgba(96, 37, 255, 0.05);
+    color: var(--primary-purple);
+    border-radius: 10px;
+    padding: 8px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .clear-filters-btn:hover {
+    background: rgba(96, 37, 255, 0.1);
+  }
+
+  /* Objects Grid & Card */
+  .objects-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 8px;
+  }
+  .object-list-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--surface-opaque);
+    border-radius: var(--radius-lg);
+    padding: 16px;
+    border: none;
+    box-shadow: var(--card-shadow);
+    text-align: left;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    width: 100%;
+  }
+  .object-list-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 16px 40px rgba(96, 37, 255, 0.12);
+  }
+  .object-list-card-icon {
+    font-size: 1.8rem;
+    background: var(--light-gray);
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  .object-list-card-details {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+  }
+  .object-list-card-name {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .object-list-card-desc {
+    font-size: 0.78rem;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .object-list-card-arrow {
+    font-size: 1.2rem;
+    color: var(--muted);
+  }
+
+  /* Detailed Chronicle View styling */
+  .chronicle-view {
+    display: flex;
+    flex-direction: column;
+  }
+  .back-link-btn {
+    border: none;
+    background: none;
+    color: var(--primary-purple);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+    margin-bottom: 12px;
+    padding: 4px 0;
+    align-self: flex-start;
+  }
+  .object-avatar-emoji {
+    font-size: 3rem;
   }
 </style>

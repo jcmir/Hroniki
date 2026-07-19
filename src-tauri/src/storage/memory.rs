@@ -97,6 +97,62 @@ impl ChronologyRepository for MemoryChronologyRepository {
     async fn reminders(&self) -> Result<Vec<Reminder>, String> {
         Ok(self.reminders.clone())
     }
+
+    async fn search_entries(
+        &self,
+        query_text: Option<String>,
+        category_id: Option<String>,
+        object_id: Option<String>,
+        start_date: Option<String>,
+        end_date: Option<String>
+    ) -> Result<Vec<Entry>, String> {
+        let mut results = self.entries.clone();
+
+        if let Some(ref text) = query_text {
+            let text_lower = text.to_lowercase();
+            results.retain(|e| {
+                e.title.to_lowercase().contains(&text_lower)
+                    || e.description.as_ref().map(|d| d.to_lowercase().contains(&text_lower)).unwrap_or(false)
+            });
+        }
+
+        if let Some(ref cat_id_str) = category_id {
+            if let Ok(cat_uuid) = uuid::Uuid::parse_str(cat_id_str) {
+                let target_cat_id = crate::domain::CategoryId::from(cat_uuid);
+                let valid_object_ids: std::collections::HashSet<crate::domain::ChronicleObjectId> = self.objects
+                    .iter()
+                    .filter(|o| o.category_id == target_cat_id)
+                    .map(|o| o.id)
+                    .collect();
+                results.retain(|e| valid_object_ids.contains(&e.object_id));
+            }
+        }
+
+        if let Some(ref obj_id_str) = object_id {
+            if let Ok(obj_uuid) = uuid::Uuid::parse_str(obj_id_str) {
+                let target_obj_id = crate::domain::ChronicleObjectId::from(obj_uuid);
+                results.retain(|e| e.object_id == target_obj_id);
+            }
+        }
+
+        if let Some(ref start) = start_date {
+            if let Ok(start_dt) = chrono::DateTime::parse_from_rfc3339(start) {
+                let start_utc = start_dt.with_timezone(&chrono::Utc);
+                results.retain(|e| e.occurred_at >= start_utc);
+            }
+        }
+
+        if let Some(ref end) = end_date {
+            if let Ok(end_dt) = chrono::DateTime::parse_from_rfc3339(end) {
+                let end_utc = end_dt.with_timezone(&chrono::Utc);
+                results.retain(|e| e.occurred_at <= end_utc);
+            }
+        }
+
+        results.sort_by(|a, b| b.occurred_at.cmp(&a.occurred_at));
+
+        Ok(results)
+    }
 }
 
 #[cfg(test)]

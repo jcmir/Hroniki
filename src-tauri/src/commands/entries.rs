@@ -161,3 +161,19 @@ pub async fn update_entry(
     service.repository_mut().update_entry(id, title, description).await.map_err(|e| e.to_string())?;
     Ok(())
 }
+
+#[tauri::command]
+pub async fn search_entries(
+    query_text: Option<String>,
+    category_id: Option<String>,
+    object_id: Option<String>,
+    start_date: Option<String>,
+    end_date: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<Vec<Entry>, String> {
+    let service = state.service.lock().await;
+    service
+        .repository()
+        .search_entries(query_text, category_id, object_id, start_date, end_date)
+        .await
+}
