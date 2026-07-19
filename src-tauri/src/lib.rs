@@ -17,6 +17,9 @@ pub mod storage;
 
 /// Application version — single source of truth for crash reports and settings UI.
 pub const APP_VERSION: &str = "0.2.1-beta";
+pub const APP_BUILD_CODE: u32 = 21;
+pub const APP_BUILD_DATE: &str = "2026-07-20";
+pub const APP_PACKAGE_ID: &str = "app.hroniki.mobile";
 
 use crate::{
     app_state::AppState,
@@ -200,6 +203,7 @@ pub fn run() {
             commands::diagnostics::get_crash_logs,
             commands::diagnostics::read_crash_log,
             commands::diagnostics::clear_crash_logs,
+            commands::info::get_build_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1427,3 +1427,13 @@ async fn test_memory_center_retrieval() {
 
     pool.close().await;
 }
+
+#[test]
+fn test_build_info_contract() {
+    let info = crate::commands::info::get_build_info();
+    assert_eq!(info.version, "0.2.1-beta");
+    assert_eq!(info.build_code, 21);
+    assert_eq!(info.build_date, "2026-07-20");
+    assert_eq!(info.package_id, "app.hroniki.mobile");
+    assert!(!info.target_os.is_empty());
+}

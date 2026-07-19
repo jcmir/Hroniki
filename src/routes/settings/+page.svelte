@@ -12,7 +12,10 @@
   let isWorking = false;
 
   interface CrashLog { filename: string; size_bytes: number; created_at: string; }
+  interface BuildInfo { version: string; build_code: number; build_date: string; target_os: string; package_id: string; }
+
   let crashLogs: CrashLog[] = [];
+  let buildInfo: BuildInfo | null = null;
   let selectedLog: string | null = null;
   let selectedLogContent = '';
   let clearingLogs = false;
@@ -21,6 +24,9 @@
     try {
       crashLogs = await invoke<CrashLog[]>('get_crash_logs');
     } catch { crashLogs = []; }
+    try {
+      buildInfo = await invoke<BuildInfo>('get_build_info');
+    } catch { buildInfo = null; }
   });
 
   async function handleViewLog(filename: string) {
@@ -169,8 +175,16 @@
       {/if}
 
       <div class="app-version-card">
-        <span>Версия приложения:</span>
-        <strong class="ver-badge">Beta 0.2.1</strong>
+        <div class="ver-main">
+          <span>Версия ХРОНИКИ:</span>
+          <strong class="ver-badge">Beta {buildInfo ? buildInfo.version : '0.2.1-beta'}</strong>
+        </div>
+        {#if buildInfo}
+          <div class="ver-details">
+            <span>Сборка #{buildInfo.build_code} ({buildInfo.build_date})</span>
+            <span class="pkg-id">{buildInfo.package_id} &bull; {buildInfo.target_os}</span>
+          </div>
+        {/if}
       </div>
 
       <!-- Diagnostics Glass Card -->
@@ -416,11 +430,38 @@
 
   .app-version-card {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    gap: 0.4rem;
     padding: 1rem;
     font-size: 0.85rem;
     color: var(--text-muted);
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+  }
+
+  .ver-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+  }
+
+  .ver-details {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    border-top: 1px dashed var(--border-subtle);
+    padding-top: 0.35rem;
+    margin-top: 0.1rem;
+  }
+
+  .pkg-id {
+    font-family: monospace;
+    font-size: 0.72rem;
+    color: var(--accent-primary);
   }
 
   .ver-badge {
