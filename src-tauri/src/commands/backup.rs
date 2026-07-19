@@ -1,6 +1,20 @@
-use std::io::Write;
+use std::io::{Read, Write};
 use tauri::{State, Manager};
-use crate::{app_state::AppState, application::security};
+use serde::{Serialize, Deserialize};
+use crate::{
+    app_state::AppState,
+    application::{security, chronology::ChronologyService},
+    storage::{connection::create_pool, SqliteChronologyRepository, migrations::run_migrations},
+};
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ArchiveManifest {
+    pub app_name: String,
+    pub version: String,
+    pub schema_version: u32,
+    pub encryption_version: String,
+    pub exported_at: String,
+}
 
 #[tauri::command]
 pub async fn export_archive(password: String, state: State<'_, AppState>, app: tauri::AppHandle) -> Result<String, String> {
@@ -48,6 +62,18 @@ pub async fn export_archive(password: String, state: State<'_, AppState>, app: t
         zip.start_file("chronology.sqlite", options).map_err(|e| e.to_string())?;
         let db_bytes = std::fs::read(&temp_db_path).map_err(|e| e.to_string())?;
         zip.write_all(&db_bytes).map_err(|e| e.to_string())?;
+
+        // Add manifest.json for Archive Format v2
+        let manifest = ArchiveManifest {
+            app_name: "ХРОНИКИ".to_string(),
+            version: "1.0.0".to_string(),
+            schema_version: 6, // current version matching migration 0006
+            encryption_version: "AES-256-GCM".to_string(),
+            exported_at: chrono::Utc::now().to_rfc3339(),
+        };
+        let manifest_json = serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?;
+        zip.start_file("manifest.json", options).map_err(|e| e.to_string())?;
+        zip.write_all(manifest_json.as_bytes()).map_err(|e| e.to_string())?;
 
         // Add media files to ZIP
         let originals_dir = app_data_dir.join("media").join("originals");
@@ -103,13 +129,42 @@ pub async fn import_archive(password: String, state: State<'_, AppState>, app: t
     let zip_bytes = security::decrypt_data(&encrypted_bytes, &password)?;
 
     // 3. Close the DB pool connection so we can safely overwrite chronology.sqlite
-    let service = state.service.lock().await;
+    let mut service = state.service.lock().await;
     let pool = service.repository().pool();
     pool.close().await;
 
     // 4. Extract zip archive contents
     let reader = std::io::Cursor::new(zip_bytes);
     let mut archive = zip::ZipArchive::new(reader).map_err(|e| e.to_string())?;
+
+    // Verify manifest if it exists (Archive Format v2)
+    let mut manifest: Option<ArchiveManifest> = None;
+    if let Ok(mut manifest_file) = archive.by_name("manifest.json") {
+        let mut manifest_str = String::new();
+        if manifest_file.read_to_string(&mut manifest_str).is_ok() {
+            if let Ok(parsed) = serde_json::from_str::<ArchiveManifest>(&mut manifest_str) {
+                manifest = Some(parsed);
+            }
+        }
+    }
+
+    // Reject import if the archive format version is newer than current app database schema
+    if let Some(m) = manifest {
+        if m.schema_version > 6 {
+            // Re-establish original connection pool so the app does not crash or freeze
+            let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+            let db_path = app_data_dir.join("database").join("chronology.sqlite");
+            let db_url = format!("sqlite://{}", db_path.to_string_lossy().replace('\\', "/"));
+            let restored_pool = create_pool(&db_url).await.map_err(|e| e.to_string())?;
+            let repository = SqliteChronologyRepository::new(restored_pool);
+            *service = ChronologyService::new(repository);
+            
+            return Err(format!(
+                "Невозможно импортировать архив. Он был экспортирован из более новой версии приложения (версия схемы {}). Пожалуйста, обновите приложение ХРОНИКИ до актуальной версии.",
+                m.schema_version
+            ));
+        }
+    }
 
     let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let db_path = app_data_dir.join("database").join("chronology.sqlite");
@@ -137,5 +192,15 @@ pub async fn import_archive(password: String, state: State<'_, AppState>, app: t
         }
     }
 
+    // 5. Reinitialize the database pool connection & run migrations
+    let db_url = format!("sqlite://{}", db_path.to_string_lossy().replace('\\', "/"));
+    let restored_pool = create_pool(&db_url).await.map_err(|e| e.to_string())?;
+    run_migrations(&restored_pool).await.map_err(|e| e.to_string())?;
+
+    // Update the AppState service with the new pool connection
+    let repository = SqliteChronologyRepository::new(restored_pool);
+    *service = ChronologyService::new(repository);
+
     Ok(())
 }
+
