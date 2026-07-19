@@ -3,7 +3,7 @@ use sqlx::{Row, SqlitePool};
 
 use crate::domain::{Category, CategoryId, ChronicleObject, ChronicleObjectId, Entry, EntryId, Photo, PhotoId, Reminder, ReminderId};
 
-use super::ChronologyRepository;
+use super::{ChronologyRepository, ObjectStats};
 
 pub struct SqliteChronologyRepository {
     pool: SqlitePool,
@@ -609,7 +609,7 @@ impl ChronologyRepository for SqliteChronologyRepository {
                 e.updated_at
             FROM entries e
             JOIN objects o ON e.object_id = o.id
-            WHERE (?1 IS NULL OR e.title LIKE ?1 OR e.description LIKE ?1)
+            WHERE (?1 IS NULL OR LOWER(e.title) LIKE LOWER(?1) OR LOWER(e.description) LIKE LOWER(?1))
               AND (?2 IS NULL OR o.category_id = ?2)
               AND (?3 IS NULL OR e.object_id = ?3)
               AND (?4 IS NULL OR e.occurred_at >= ?4)
@@ -657,6 +657,50 @@ impl ChronologyRepository for SqliteChronologyRepository {
         }
 
         Ok(result)
+    }
+
+    async fn get_object_stats(&self, object_id: crate::domain::ChronicleObjectId) -> Result<ObjectStats, String> {
+        let object_id_str = object_id.value().to_string();
+
+        let row = sqlx::query(
+            r#"
+            SELECT
+                o.created_at AS created_at,
+                (SELECT COUNT(*) FROM entries WHERE object_id = o.id) AS total_entries,
+                (SELECT COUNT(*) FROM photos p JOIN entries e ON p.entry_id = e.id WHERE e.object_id = o.id) AS total_photos,
+                (SELECT title FROM entries WHERE object_id = o.id ORDER BY occurred_at DESC LIMIT 1) AS last_event_title,
+                (SELECT occurred_at FROM entries WHERE object_id = o.id ORDER BY occurred_at DESC LIMIT 1) AS last_event_date,
+                (SELECT MIN(r.trigger_at) FROM reminders r JOIN entries e ON r.entry_id = e.id WHERE e.object_id = o.id AND r.status = 'Scheduled') AS next_reminder_date
+            FROM objects o
+            WHERE o.id = ?
+            "#
+        )
+        .bind(&object_id_str)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+        let created_at_str: String = row.try_get("created_at").map_err(|e| e.to_string())?;
+        let total_entries: i64 = row.try_get("total_entries").map_err(|e| e.to_string())?;
+        let total_photos: i64 = row.try_get("total_photos").map_err(|e| e.to_string())?;
+        let last_event_title: Option<String> = row.try_get("last_event_title").map_err(|e| e.to_string())?;
+        let last_event_date: Option<String> = row.try_get("last_event_date").map_err(|e| e.to_string())?;
+        let next_reminder_date: Option<String> = row.try_get("next_reminder_date").map_err(|e| e.to_string())?;
+
+        let created_at = DateTime::parse_from_rfc3339(&created_at_str)
+            .map_err(|e| e.to_string())?
+            .with_timezone(&Utc);
+
+        let age_days = (Utc::now() - created_at).num_days();
+
+        Ok(ObjectStats {
+            age_days: if age_days < 0 { 0 } else { age_days },
+            total_entries: total_entries as usize,
+            total_photos: total_photos as usize,
+            last_event_title,
+            last_event_date,
+            next_reminder_date,
+        })
     }
 }
 

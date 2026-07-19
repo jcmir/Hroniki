@@ -7,44 +7,13 @@
   import BottomNav from '$lib/components/BottomNav.svelte';
   import Card from '$lib/components/Card.svelte';
   import EntryDetail from '$lib/components/EntryDetail.svelte';
+  import { mockInvoke } from '$lib/mock/mockRepository';
 
   // State variables from DB
   let categories = $state<any[]>([]);
   let objects = $state<any[]>([]);
   let entries = $state<any[]>([]);
   let reminders = $state<any[]>([]);
-
-  // Browser-only mockup fallback database
-  let mockCategories = [
-    { id: '1', name: 'Сад' },
-    { id: '2', name: 'Здоровье' },
-    { id: '3', name: 'Авто' }
-  ];
-  let mockObjects = [
-    { id: 'obj1', category_id: '1', name: 'Яблоня', description: 'Дерево в саду' }
-  ];
-  let mockEntries = $state<any[]>([
-    {
-      id: 'e1',
-      object_id: 'obj1',
-      occurred_at: new Date(Date.now() - 3600000).toISOString(),
-      title: 'Опрыскала томаты Фитовермом от тли',
-      description: 'Листья выглядят намного лучше.'
-    },
-    {
-      id: 'e2',
-      object_id: 'obj1',
-      occurred_at: new Date(Date.now() - 7200000).toISOString(),
-      title: 'Сдал анализы',
-      description: 'Самочувствие стало лучше. Продолжаю бег по утрам.'
-    }
-  ]);
-  
-  // Mapping of mock entry IDs to mock photos
-  let mockPhotosMap = new Map<string, any[]>([
-    ['e1', [{ id: 'p1', entry_id: 'e1', path: '/garden_tomatoes.png', thumbnail: '/garden_tomatoes.png' }]],
-    ['e2', [{ id: 'p2', entry_id: 'e2', path: '/running_shoes.png', thumbnail: '/running_shoes.png' }]]
-  ]);
 
   // Navigation state
   let activeTab = $state<'feed' | 'objects' | 'reminders' | 'settings'>('feed');
@@ -96,107 +65,7 @@
     if (isTauri) {
       return await invoke<T>(cmd, args);
     } else {
-      console.warn(`[Tauri Mock] Invoke '${cmd}'`, args);
-      if (cmd === 'get_categories') {
-        return mockCategories as T;
-      }
-      if (cmd === 'get_objects') {
-        return mockObjects as T;
-      }
-      if (cmd === 'get_entries') {
-        return mockEntries as T;
-      }
-      if (cmd === 'get_entry_photos') {
-        const customPhotos = mockPhotosMap.get(args.entryId) || [];
-        return customPhotos as T;
-      }
-      if (cmd === 'search_entries') {
-        let results = [...mockEntries];
-        if (args.queryText) {
-          const q = args.queryText.toLowerCase();
-          results = results.filter(e => e.title.toLowerCase().includes(q) || (e.description && e.description.toLowerCase().includes(q)));
-        }
-        if (args.objectId) {
-          results = results.filter(e => e.object_id === args.objectId);
-        }
-        return results as T;
-      }
-      if (cmd === 'get_object_stats') {
-        const objEntries = mockEntries.filter(e => e.object_id === args.objectId);
-        return {
-          age_days: 12,
-          total_entries: objEntries.len || objEntries.length,
-          total_photos: objEntries.length,
-          last_event_title: objEntries[0] ? objEntries[0].title : null,
-          last_event_date: objEntries[0] ? objEntries[0].occurred_at : null,
-          next_reminder_date: new Date(Date.now() + 86400000 * 14).toISOString()
-        } as T;
-      }
-      if (cmd === 'create_object') {
-        const newObj = {
-          id: `obj-${Math.random()}`,
-          category_id: args.categoryId,
-          name: args.name,
-          description: args.description || null
-        };
-        mockObjects.push(newObj);
-        return newObj.id as T;
-      }
-      if (cmd === 'create_entry') {
-        const newEnt = {
-          id: `ent-${Math.random()}`,
-          object_id: args.objectId,
-          occurred_at: new Date().toISOString(),
-          title: args.title,
-          description: args.description || null
-        };
-        mockEntries.unshift(newEnt);
-        
-        // Save mock photos
-        if (args.imageFilenames && args.imageFilenames.length > 0) {
-          const mockPhotosList = args.imageFilenames.map((f: string) => ({
-            id: `p-${Math.random()}`,
-            entry_id: newEnt.id,
-            path: f,
-            thumbnail: f
-          }));
-          mockPhotosMap.set(newEnt.id, mockPhotosList);
-        }
-        
-        return newEnt.id as T;
-      }
-      if (cmd === 'select_images') {
-        return ['/garden_tomatoes.png'] as T;
-      }
-      if (cmd === 'save_media') {
-        return args.sourcePath as T;
-      }
-      if (cmd === 'delete_entry') {
-        mockEntries = mockEntries.filter(e => e.id !== args.entryId);
-        mockPhotosMap.delete(args.entryId);
-        return null as T;
-      }
-      if (cmd === 'update_entry') {
-        const ent = mockEntries.find(e => e.id === args.entryId);
-        if (ent) {
-          ent.title = args.title;
-          ent.description = args.description;
-        }
-        return null as T;
-      }
-      if (cmd === 'create_reminder') {
-        return `mock-reminder-${Math.random()}` as T;
-      }
-      if (cmd === 'get_reminders') {
-        return [] as T;
-      }
-      if (cmd === 'complete_reminder') {
-        return null as T;
-      }
-      if (cmd === 'snooze_reminder') {
-        return null as T;
-      }
-      return null as T;
+      return mockInvoke(cmd, args) as T;
     }
   }
 

@@ -1,6 +1,6 @@
 use crate::domain::{Category, ChronicleObject, Entry, EntryId, Photo, Reminder};
 
-use super::ChronologyRepository;
+use super::{ChronologyRepository, ObjectStats};
 
 #[derive(Default)]
 pub struct MemoryChronologyRepository {
@@ -152,6 +152,64 @@ impl ChronologyRepository for MemoryChronologyRepository {
         results.sort_by(|a, b| b.occurred_at.cmp(&a.occurred_at));
 
         Ok(results)
+    }
+
+    async fn get_object_stats(&self, object_id: crate::domain::ChronicleObjectId) -> Result<ObjectStats, String> {
+        let objects = self.objects.clone();
+        let object = objects.into_iter().find(|o| o.id == object_id)
+            .ok_or_else(|| "Object not found".to_string())?;
+
+        let obj_entries: Vec<_> = self.entries.iter().filter(|e| e.object_id == object_id).cloned().collect();
+        let age_days = (chrono::Utc::now() - object.created_at).num_days();
+
+        let total_entries = obj_entries.len();
+        
+        let mut total_photos = 0;
+        for entry in &obj_entries {
+            let photos_count = self.photos.iter().filter(|p| p.entry_id == entry.id).count();
+            total_photos += photos_count;
+        }
+
+        let mut sorted_entries = obj_entries.clone();
+        sorted_entries.sort_by(|a, b| b.occurred_at.cmp(&a.occurred_at));
+
+        let last_event = sorted_entries.first();
+        let last_event_title = last_event.map(|e| e.title.clone());
+        let last_event_date = last_event.map(|e| e.occurred_at.to_rfc3339());
+
+        let mut next_reminder_date = None;
+        let mut closest_trigger: Option<chrono::DateTime<chrono::Utc>> = None;
+
+        for entry in &obj_entries {
+            let reminders: Vec<_> = self.reminders.iter().filter(|r| r.entry_id == entry.id).cloned().collect();
+            for reminder in reminders {
+                if reminder.status == "Scheduled" {
+                    match closest_trigger {
+                        None => {
+                            closest_trigger = Some(reminder.trigger_at);
+                        }
+                        Some(current) => {
+                            if reminder.trigger_at < current {
+                                closest_trigger = Some(reminder.trigger_at);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if let Some(trigger) = closest_trigger {
+            next_reminder_date = Some(trigger.to_rfc3339());
+        }
+
+        Ok(ObjectStats {
+            age_days: if age_days < 0 { 0 } else { age_days },
+            total_entries,
+            total_photos,
+            last_event_title,
+            last_event_date,
+            next_reminder_date,
+        })
     }
 }
 

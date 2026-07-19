@@ -38,4 +38,16 @@ pub trait ChronologyRepository {
         start_date: Option<String>,
         end_date: Option<String>
     ) -> Result<Vec<Entry>, String>;
+
+    async fn get_object_stats(&self, object_id: crate::domain::ChronicleObjectId) -> Result<ObjectStats, String>;
+}
+
+#[derive(serde::Serialize, Clone)]
+pub struct ObjectStats {
+    pub age_days: i64,
+    pub total_entries: usize,
+    pub total_photos: usize,
+    pub last_event_title: Option<String>,
+    pub last_event_date: Option<String>,
+    pub next_reminder_date: Option<String>,
 }
