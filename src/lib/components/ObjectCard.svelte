@@ -1,7 +1,8 @@
 <script lang="ts">
   import { fly } from 'svelte/transition';
   import { getCategoryIcon } from '../utils/categoryIcons';
-  import type { ChronicleObject } from '../types/ChronicleObject';
+  import type { ChronicleObject } from '../types';
+  import { formatAge, pluralRu } from '../utils/dateHelpers';
 
   interface Props {
     object: ChronicleObject;
@@ -14,29 +15,7 @@
   let { object, categoryName = 'Категория', entryCount = 0, index = 0, onSelect }: Props = $props();
 
   const icon = $derived(getCategoryIcon(categoryName));
-
-  function pluralRu(n: number, one: string, few: string, many: string): string {
-    const mod10 = n % 10, mod100 = n % 100;
-    if (mod10 === 1 && mod100 !== 11) return one;
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
-    return many;
-  }
-
-  function calcAge(createdAt: string | undefined): string {
-    if (!createdAt) return '';
-    const ms = Date.now() - new Date(createdAt).getTime();
-    const totalDays = Math.floor(ms / 86_400_000);
-    if (totalDays < 1) return 'сегодня';
-    const years = Math.floor(totalDays / 365);
-    const months = Math.floor((totalDays % 365) / 30);
-    const parts: string[] = [];
-    if (years > 0) parts.push(`${years} ${pluralRu(years, 'год', 'года', 'лет')}`);
-    if (months > 0) parts.push(`${months} мес`);
-    if (years === 0 && months === 0) parts.push(`${totalDays % 30} дн`);
-    return parts.join(' ');
-  }
-
-  const age = $derived(calcAge(object.created_at));
+  const age = $derived(formatAge(object.created_at, true));
 </script>
 
 <button

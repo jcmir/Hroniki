@@ -14,22 +14,19 @@
   import { mockInvoke } from '$lib/mock/mockRepository';
 
   // Explicit Types
-  import type { Category } from '$lib/types/Category';
-  import type { ChronicleObject } from '$lib/types/ChronicleObject';
-  import type { Entry } from '$lib/types/Entry';
-  import type { ObjectStats } from '$lib/types/ObjectStats';
+  import type { Category, ChronicleObject, Entry, ObjectStats, Reminder } from '$lib/types';
 
   // State variables from DB
   let categories = $state<Category[]>([]);
   let objects = $state<ChronicleObject[]>([]);
   let entries = $state<Entry[]>([]);
-  let reminders = $state<any[]>([]);
+  let reminders = $state<Reminder[]>([]);
 
   // Navigation state
   let activeTab = $state<'feed' | 'objects' | 'reminders' | 'settings'>('feed');
   let showAddModal = $state(false);
   let showDetail = $state(false);
-  let selectedEntry = $state<any>(null);
+  let selectedEntry = $state<Entry | null>(null);
 
   // Selected date state
   let selectedDateIndex = $state(0);
@@ -299,7 +296,7 @@
       }
 
       if (selectedObjectForChronicle) {
-        selectedObjectEntries = entries.filter(e => e.object_id === selectedObjectForChronicle.id);
+        selectedObjectEntries = entries.filter(e => e.object_id === selectedObjectForChronicle!.id);
       }
     } catch (e) {
       console.error('Failed to load data from database:', e);

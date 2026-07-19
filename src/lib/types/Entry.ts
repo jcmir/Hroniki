@@ -2,11 +2,12 @@
   id: string;
   object_id: string;
   occurred_at: string;
-  title: string;
-  description: string | null;
-  created_at: string;
-  updated_at: string;
-  images?: string[];
-  tags?: string[];
-  reminderText?: string;
+  categoryName: string;
+  categoryIcon: string;
+  categoryTheme: 'green' | 'blue' | 'pink' | 'orange' | 'purple';
+  time: string;
+  content: string;
+  images: string[];
+  tags: string[];
+  reminderText: string;
 }

@@ -2,10 +2,8 @@
   import { fade, fly } from 'svelte/transition';
   import TimelineCard from './TimelineCard.svelte';
   import { getCategoryIcon } from '../utils/categoryIcons';
-  import type { ChronicleObject } from '../types/ChronicleObject';
-  import type { ObjectStats } from '../types/ObjectStats';
-  import type { Entry } from '../types/Entry';
-  import type { Category } from '../types/Category';
+  import type { ChronicleObject, ObjectStats, Entry, Category } from '../types';
+  import { formatAge, formatDateRu } from '../utils/dateHelpers';
 
   interface Props {
     object: ChronicleObject;
@@ -18,33 +16,11 @@
 
   let { object, stats, entries, categories, onBack, onCardClick }: Props = $props();
 
-  function pluralRu(n: number, one: string, few: string, many: string): string {
-    const mod10 = n % 10, mod100 = n % 100;
-    if (mod10 === 1 && mod100 !== 11) return one;
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
-    return many;
-  }
-
-  function calcAge(createdAt: string | undefined): string {
-    if (!createdAt) return '';
-    const ms = Date.now() - new Date(createdAt).getTime();
-    const totalDays = Math.floor(ms / 86_400_000);
-    if (totalDays < 1) return 'только что';
-    const years = Math.floor(totalDays / 365);
-    const months = Math.floor((totalDays % 365) / 30);
-    const days = totalDays % 30;
-    const parts: string[] = [];
-    if (years > 0) parts.push(`${years} ${pluralRu(years, 'год', 'года', 'лет')}`);
-    if (months > 0) parts.push(`${months} ${pluralRu(months, 'месяц', 'месяца', 'месяцев')}`);
-    if (years === 0 && months === 0 && days > 0) parts.push(`${days} ${pluralRu(days, 'день', 'дня', 'дней')}`);
-    return parts.join(' ');
-  }
-
   // Group entries by year of occurred_at, sorted ascending
   function groupByYear(list: Entry[]): [number, Entry[]][] {
     const map: Record<number, Entry[]> = {};
     for (const e of list) {
-      const year = new Date(e.occurred_at ?? e.created_at).getFullYear();
+      const year = new Date(e.occurred_at).getFullYear();
       (map[year] ??= []).push(e);
     }
     return Object.entries(map)
@@ -52,19 +28,15 @@
       .sort((a, b) => a[0] - b[0]);
   }
 
-  function formatDayMonth(dateStr: string): string {
-    return new Date(dateStr).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
-  }
-
   const categoryName = $derived(categories.find((c: Category) => c.id === object.category_id)?.name ?? 'Объект');
   const icon = $derived(getCategoryIcon(categoryName));
-  const age = $derived(calcAge(object.created_at));
+  const age = $derived(formatAge(object.created_at));
   const yearGroups = $derived(groupByYear(entries));
 
   // First ever entry by occurred_at
   const firstEntry = $derived(
     entries.length > 0
-      ? [...entries].sort((a, b) => new Date(a.occurred_at ?? a.created_at).getTime() - new Date(b.occurred_at ?? b.created_at).getTime())[0]
+      ? [...entries].sort((a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime())[0]
       : null
   );
 </script>
@@ -90,7 +62,7 @@
         <span class="last-event-label">Последнее:</span>
         <span class="last-event-value">{stats.last_event_title}</span>
         {#if stats.last_event_date}
-          <span class="last-event-time">({formatDayMonth(stats.last_event_date)})</span>
+          <span class="last-event-time">({formatDateRu(stats.last_event_date)})</span>
         {/if}
       </div>
     {/if}
@@ -138,8 +110,8 @@
           <span class="first-event-dot">🌱</span>
           <div class="first-event-body">
             <span class="first-event-label">Первое событие</span>
-            <span class="first-event-title">{firstEntry.title || firstEntry.content?.split('\n')[0] || 'Запись'}</span>
-            <span class="first-event-date">{formatDayMonth(firstEntry.occurred_at ?? firstEntry.created_at)}</span>
+            <span class="first-event-title">{firstEntry.content?.split('\n')[0] || 'Запись'}</span>
+            <span class="first-event-date">{formatDateRu(firstEntry.occurred_at)}</span>
           </div>
         </div>
       {/if}
