@@ -1,15 +1,15 @@
+use async_trait::async_trait;
+use chrono::{Duration, Utc};
+use sqlx::SqlitePool;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use chrono::{Utc, Duration};
 use uuid::Uuid;
-use sqlx::SqlitePool;
-use async_trait::async_trait;
 
-use super::models::{ReminderStatus, RecurrenceRule};
-use super::repository::{ReminderRepository, SqliteReminderRepository};
+use super::models::{RecurrenceRule, ReminderStatus};
 use super::provider::NotificationProvider;
-use super::service::ReminderService;
+use super::repository::{ReminderRepository, SqliteReminderRepository};
 use super::scheduler::ReminderScheduler;
+use super::service::ReminderService;
 
 struct MockNotificationProvider {
     notifications: Arc<Mutex<Vec<(String, Option<String>)>>>,
@@ -41,8 +41,12 @@ async fn create_test_pool() -> SqlitePool {
     let temp_dir = std::env::temp_dir();
     let db_file = temp_dir.join(format!("hroniki_test_reminders_{}.sqlite", Uuid::new_v4()));
     let db_url = format!("sqlite://{}", db_file.to_string_lossy().replace('\\', "/"));
-    let pool = crate::storage::connection::create_pool(&db_url).await.unwrap();
-    crate::storage::migrations::run_migrations(&pool).await.unwrap();
+    let pool = crate::storage::connection::create_pool(&db_url)
+        .await
+        .unwrap();
+    crate::storage::migrations::run_migrations(&pool)
+        .await
+        .unwrap();
     pool
 }
 
@@ -54,7 +58,13 @@ async fn test_create_and_complete_reminder() {
 
     let trigger = Utc::now() + Duration::hours(1);
     let reminder = service
-        .create_reminder(None, "Test Title".to_string(), Some("Test Body".to_string()), trigger, RecurrenceRule::Once)
+        .create_reminder(
+            None,
+            "Test Title".to_string(),
+            Some("Test Body".to_string()),
+            trigger,
+            RecurrenceRule::Once,
+        )
         .await
         .unwrap();
 
@@ -78,10 +88,16 @@ async fn test_scheduler_triggers_reminder() {
     let repo = Arc::new(SqliteReminderRepository::new(pool.clone()));
     let mock_provider = Arc::new(MockNotificationProvider::new(false));
     let service = ReminderService::new(repo.clone());
-    
+
     let trigger = Utc::now() - Duration::minutes(1);
     let reminder = service
-        .create_reminder(None, "Due Alert".to_string(), Some("Body text".to_string()), trigger, RecurrenceRule::Once)
+        .create_reminder(
+            None,
+            "Due Alert".to_string(),
+            Some("Body text".to_string()),
+            trigger,
+            RecurrenceRule::Once,
+        )
         .await
         .unwrap();
 
@@ -107,10 +123,16 @@ async fn test_provider_failed_remains_failed_for_retry() {
     let repo = Arc::new(SqliteReminderRepository::new(pool.clone()));
     let mock_provider = Arc::new(MockNotificationProvider::new(true)); // Configured to fail
     let service = ReminderService::new(repo.clone());
-    
+
     let trigger = Utc::now() - Duration::minutes(1);
     let reminder = service
-        .create_reminder(None, "Failed Alert".to_string(), None, trigger, RecurrenceRule::Once)
+        .create_reminder(
+            None,
+            "Failed Alert".to_string(),
+            None,
+            trigger,
+            RecurrenceRule::Once,
+        )
         .await
         .unwrap();
 
@@ -146,7 +168,13 @@ async fn test_cancel_already_completed_fails() {
 
     let trigger = Utc::now() + Duration::hours(1);
     let reminder = service
-        .create_reminder(None, "To Cancel".to_string(), None, trigger, RecurrenceRule::Once)
+        .create_reminder(
+            None,
+            "To Cancel".to_string(),
+            None,
+            trigger,
+            RecurrenceRule::Once,
+        )
         .await
         .unwrap();
 

@@ -7,6 +7,7 @@ pub mod domain;
 pub mod events;
 pub mod features;
 pub mod identity;
+pub mod platform;
 pub mod reminder;
 pub mod search;
 pub mod security;
@@ -15,9 +16,14 @@ pub mod storage;
 use crate::{
     app_state::AppState,
     application::chronology::ChronologyService,
+    platform::{
+        adapters::{
+            DesktopNotificationPlatform, DesktopPermissionPlatform, MemorySecureStoragePlatform,
+        },
+        PlatformContext,
+    },
     reminder::{
-        DummyNotificationProvider, ReminderScheduler, ReminderService,
-        SqliteReminderRepository,
+        DummyNotificationProvider, ReminderScheduler, ReminderService, SqliteReminderRepository,
     },
     search::{SearchService, SearchSubscriber, SqliteSearchRepository},
     storage::{connection::create_pool, SqliteChronologyRepository},
@@ -106,11 +112,22 @@ pub fn run() {
                     ReminderScheduler::new(reminder_repo, notification_provider);
                 reminder_scheduler.start();
 
+                // Initialize Platform Context
+                let platform_notifications = Arc::new(DesktopNotificationPlatform);
+                let platform_storage = Arc::new(MemorySecureStoragePlatform::new());
+                let platform_permissions = Arc::new(DesktopPermissionPlatform);
+                let platform_context = Arc::new(PlatformContext::new(
+                    platform_notifications,
+                    platform_storage,
+                    platform_permissions,
+                ));
+
                 app.manage(AppState {
                     service: Arc::new(Mutex::new(service)),
                     event_bus,
                     search_service,
                     reminder_service,
+                    platform_context,
                 });
             });
 

@@ -1,13 +1,13 @@
+use async_trait::async_trait;
+use chrono::{Duration, Utc};
+use sqlx::{Row, SqlitePool};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use chrono::{Utc, Duration};
 use uuid::Uuid;
-use sqlx::{SqlitePool, Row};
-use async_trait::async_trait;
 
-use super::models::{Reminder, ReminderStatus, RecurrenceRule};
-use super::repository::{ReminderRepository, SqliteReminderRepository};
+use super::models::{RecurrenceRule, Reminder, ReminderStatus};
 use super::provider::NotificationProvider;
+use super::repository::{ReminderRepository, SqliteReminderRepository};
 use super::scheduler::ReminderScheduler;
 
 // 1. Mock provider that fails a specified number of times then succeeds
@@ -45,8 +45,12 @@ async fn create_test_pool() -> SqlitePool {
     let temp_dir = std::env::temp_dir();
     let db_file = temp_dir.join(format!("hroniki_test_hardening_{}.sqlite", Uuid::new_v4()));
     let db_url = format!("sqlite://{}", db_file.to_string_lossy().replace('\\', "/"));
-    let pool = crate::storage::connection::create_pool(&db_url).await.unwrap();
-    crate::storage::migrations::run_migrations(&pool).await.unwrap();
+    let pool = crate::storage::connection::create_pool(&db_url)
+        .await
+        .unwrap();
+    crate::storage::migrations::run_migrations(&pool)
+        .await
+        .unwrap();
     pool
 }
 
@@ -78,7 +82,13 @@ async fn test_concurrent_scheduler_claims() {
         let r_clone = repo.clone();
         let id_clone = reminder.id.clone();
         join_handles.push(tokio::spawn(async move {
-            r_clone.update_status(&id_clone, ReminderStatus::Pending, ReminderStatus::Triggered).await
+            r_clone
+                .update_status(
+                    &id_clone,
+                    ReminderStatus::Pending,
+                    ReminderStatus::Triggered,
+                )
+                .await
         }));
     }
 
@@ -150,10 +160,12 @@ async fn test_migration_0009_preserves_custom_repeat_days() {
     let temp_dir = std::env::temp_dir();
     let db_file = temp_dir.join(format!("hroniki_migration_test_{}.sqlite", Uuid::new_v4()));
     let db_url = format!("sqlite://{}", db_file.to_string_lossy().replace('\\', "/"));
-    
+
     // Create database file manually
     std::fs::File::create(&db_file).unwrap();
-    let pool = crate::storage::connection::create_pool(&db_url).await.unwrap();
+    let pool = crate::storage::connection::create_pool(&db_url)
+        .await
+        .unwrap();
 
     // Run migrations 1 to 7 manually to set up old schema
     // 0001_initial.sql
@@ -182,7 +194,7 @@ async fn test_migration_0009_preserves_custom_repeat_days() {
 
     // Now run migration 0009_reminders_v2 manually
     let migration_sql = include_str!("../../migrations/0009_reminders_v2.sql");
-    
+
     // We execute the migration queries. SQLite requires executing batch scripts as multiple statements or via transaction block
     // sqlx execute will run multiple semicolon-separated statements sequentially.
     sqlx::query(migration_sql).execute(&pool).await.unwrap();

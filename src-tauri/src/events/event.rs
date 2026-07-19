@@ -49,4 +49,10 @@ pub enum DomainEvent {
         plan: String,
         updated_at: String,
     },
+
+    // Application Lifecycle Events
+    ApplicationStarted,
+    ApplicationSuspended,
+    ApplicationResumed,
+    ApplicationClosed,
 }

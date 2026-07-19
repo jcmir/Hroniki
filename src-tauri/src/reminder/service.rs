@@ -1,7 +1,7 @@
-use std::sync::Arc;
-use super::models::{Reminder, ReminderStatus, RecurrenceRule};
+use super::models::{RecurrenceRule, Reminder, ReminderStatus};
 use super::repository::ReminderRepository;
 use chrono::Utc;
+use std::sync::Arc;
 use uuid::Uuid;
 
 pub struct ReminderService {
@@ -44,12 +44,23 @@ impl ReminderService {
 
     pub async fn cancel_reminder(&self, id: &str) -> Result<(), String> {
         // Atomic status transition for cancellation to avoid overwriting triggered states
-        for old in &[ReminderStatus::Pending, ReminderStatus::Scheduled, ReminderStatus::Failed] {
-            if self.repository.update_status(id, old.clone(), ReminderStatus::Cancelled).await? {
+        for old in &[
+            ReminderStatus::Pending,
+            ReminderStatus::Scheduled,
+            ReminderStatus::Failed,
+        ] {
+            if self
+                .repository
+                .update_status(id, old.clone(), ReminderStatus::Cancelled)
+                .await?
+            {
                 return Ok(());
             }
         }
-        Err("Reminder cannot be cancelled because it is already triggered, completed or cancelled".to_string())
+        Err(
+            "Reminder cannot be cancelled because it is already triggered, completed or cancelled"
+                .to_string(),
+        )
     }
 
     pub async fn complete_reminder(&self, id: &str) -> Result<bool, String> {

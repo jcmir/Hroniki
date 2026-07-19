@@ -1,7 +1,7 @@
+use super::models::{RecurrenceRule, Reminder, ReminderStatus};
 use async_trait::async_trait;
-use sqlx::{Row, SqlitePool};
-use super::models::{Reminder, ReminderStatus, RecurrenceRule};
 use chrono::{DateTime, Utc};
+use sqlx::{Row, SqlitePool};
 
 #[async_trait]
 pub trait ReminderRepository: Send + Sync {
@@ -56,7 +56,7 @@ impl ReminderRepository for SqliteReminderRepository {
         .bind(&reminder.body)
         .bind(trigger_at_str)
         .bind(reminder.status.as_str())
-        .bind(&reminder.recurrence.as_str())
+        .bind(reminder.recurrence.as_str())
         .bind(created_at_str)
         .bind(updated_at_str)
         .bind(completed_at_str)
@@ -88,8 +88,14 @@ impl ReminderRepository for SqliteReminderRepository {
                 trigger_at: DateTime::parse_from_rfc3339(&trigger_at_str)
                     .map_err(|e| e.to_string())?
                     .with_timezone(&Utc),
-                recurrence: RecurrenceRule::parse(&r.try_get::<String, _>("recurrence").map_err(|e| e.to_string())?)?,
-                status: ReminderStatus::parse(&r.try_get::<String, _>("status").map_err(|e| e.to_string())?)?,
+                recurrence: RecurrenceRule::parse(
+                    &r.try_get::<String, _>("recurrence")
+                        .map_err(|e| e.to_string())?,
+                )?,
+                status: ReminderStatus::parse(
+                    &r.try_get::<String, _>("status")
+                        .map_err(|e| e.to_string())?,
+                )?,
                 created_at: DateTime::parse_from_rfc3339(&created_at_str)
                     .map_err(|e| e.to_string())?
                     .with_timezone(&Utc),
@@ -107,10 +113,12 @@ impl ReminderRepository for SqliteReminderRepository {
     }
 
     async fn get_active_reminders(&self) -> Result<Vec<Reminder>, String> {
-        let rows = sqlx::query("SELECT * FROM reminders WHERE status IN ('Pending', 'Scheduled', 'Failed')")
-            .fetch_all(&self.pool)
-            .await
-            .map_err(|e| e.to_string())?;
+        let rows = sqlx::query(
+            "SELECT * FROM reminders WHERE status IN ('Pending', 'Scheduled', 'Failed')",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| e.to_string())?;
 
         let mut results = Vec::new();
         for r in rows {
@@ -127,8 +135,14 @@ impl ReminderRepository for SqliteReminderRepository {
                 trigger_at: DateTime::parse_from_rfc3339(&trigger_at_str)
                     .map_err(|e| e.to_string())?
                     .with_timezone(&Utc),
-                recurrence: RecurrenceRule::parse(&r.try_get::<String, _>("recurrence").map_err(|e| e.to_string())?)?,
-                status: ReminderStatus::parse(&r.try_get::<String, _>("status").map_err(|e| e.to_string())?)?,
+                recurrence: RecurrenceRule::parse(
+                    &r.try_get::<String, _>("recurrence")
+                        .map_err(|e| e.to_string())?,
+                )?,
+                status: ReminderStatus::parse(
+                    &r.try_get::<String, _>("status")
+                        .map_err(|e| e.to_string())?,
+                )?,
                 created_at: DateTime::parse_from_rfc3339(&created_at_str)
                     .map_err(|e| e.to_string())?
                     .with_timezone(&Utc),
@@ -163,9 +177,7 @@ impl ReminderRepository for SqliteReminderRepository {
         let now = Utc::now().to_rfc3339();
         let completed_str = Utc::now().to_rfc3339();
 
-        let q = sqlx::query(&query_str)
-            .bind(new_status.as_str())
-            .bind(now);
+        let q = sqlx::query(&query_str).bind(new_status.as_str()).bind(now);
 
         let q = if new_status == ReminderStatus::Completed {
             q.bind(completed_str)

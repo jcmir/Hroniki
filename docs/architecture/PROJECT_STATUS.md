@@ -17,5 +17,6 @@
 | **Audit Log** | Actions logger | 🚧 In Progress | v1.0.0 | Подписчик на EventBus для аудита изменений |
 | **Search** | FTS5 Engine | ✅ Production | v1.0.0 | SQLite FTS5 + SearchSubscriber, unicode61 токенизатор |
 | **Reminders** | Reminder Engine | ✅ Production | v1.0.0 | Фоновый планировщик напоминаний, абстракция NotificationProvider |
+| **Platform** | Platform Core | ✅ Production | v1.0.0 | Абстракция PlatformContext, адаптерная архитектура, трансляция ЖЦ ОС |
 | **Cloud Sync** | Sync Engine | 🚧 Planned | v1.3.0 | CloudAccountProvider для репликации в облако |
 | **AI Engine** | RAG Search | 🚧 Planned | v1.4.0 | Векторизация записей, семантический поиск по ленте |
