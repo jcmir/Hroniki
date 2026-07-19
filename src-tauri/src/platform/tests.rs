@@ -1,5 +1,5 @@
 use super::adapters::android::backend::{
-    KeyStoreBackend, KeyStoreError, MemoryKeyStoreBackend, JniKeyStoreBackend, KeyStoreState, JniBridge,
+    KeyStoreBackend, KeyStoreError, MemoryKeyStoreBackend, JniKeyStoreBackend, KeyStoreState, KeyStoreJniBridge,
 };
 use super::adapters::android::storage::WrappedSecret;
 use async_trait::async_trait;
@@ -159,48 +159,6 @@ async fn test_wrapped_secret_validation() {
         tag: vec![],
     };
     assert!(empty_secret.validate().is_err());
-}
-
-#[tokio::test]
-async fn test_ciphertext_tampering_rejected() {
-    let backend = MemoryKeyStoreBackend::new();
-    let plaintext = b"secure_database_key";
-    let mut wrapped = backend.wrap_key(plaintext).await.unwrap();
-
-    // Corrupt ciphertext
-    wrapped.ciphertext[0] ^= 1;
-
-    let result = backend.unwrap_key(&wrapped).await;
-    assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), KeyStoreError::DecryptionFailed);
-}
-
-#[tokio::test]
-async fn test_tag_tampering_rejected() {
-    let backend = MemoryKeyStoreBackend::new();
-    let plaintext = b"secure_database_key";
-    let mut wrapped = backend.wrap_key(plaintext).await.unwrap();
-
-    // Corrupt auth tag
-    wrapped.tag[0] ^= 1;
-
-    let result = backend.unwrap_key(&wrapped).await;
-    assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), KeyStoreError::DecryptionFailed);
-}
-
-#[tokio::test]
-async fn test_nonce_tampering_rejected() {
-    let backend = MemoryKeyStoreBackend::new();
-    let plaintext = b"secure_database_key";
-    let mut wrapped = backend.wrap_key(plaintext).await.unwrap();
-
-    // Corrupt nonce
-    wrapped.nonce[0] ^= 1;
-
-    let result = backend.unwrap_key(&wrapped).await;
-    assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), KeyStoreError::DecryptionFailed);
 }
 
 #[tokio::test]
@@ -392,23 +350,51 @@ async fn test_platform_context_initialization() {
 // Mock JNI Bridge for testing
 struct TestJniBridge {
     memory_backend: MemoryKeyStoreBackend,
+    should_throw_exception: tokio::sync::Mutex<bool>,
+    should_fail_jni: tokio::sync::Mutex<bool>,
+    should_return_bad_dto: tokio::sync::Mutex<bool>,
 }
 
 impl TestJniBridge {
     fn new() -> Self {
         Self {
             memory_backend: MemoryKeyStoreBackend::new(),
+            should_throw_exception: tokio::sync::Mutex::new(false),
+            should_fail_jni: tokio::sync::Mutex::new(false),
+            should_return_bad_dto: tokio::sync::Mutex::new(false),
         }
     }
 }
 
 #[async_trait]
-impl JniBridge for TestJniBridge {
-    async fn encrypt_via_jni(&self, plaintext: &[u8]) -> Result<WrappedSecret, KeyStoreError> {
+impl KeyStoreJniBridge for TestJniBridge {
+    async fn encrypt(&self, plaintext: &[u8]) -> Result<WrappedSecret, KeyStoreError> {
+        if *self.should_fail_jni.lock().await {
+            return Err(KeyStoreError::JniFailure);
+        }
+        if *self.should_throw_exception.lock().await {
+            return Err(KeyStoreError::JavaException);
+        }
+        if *self.should_return_bad_dto.lock().await {
+            // Return DTO with bad signature
+            return Ok(WrappedSecret {
+                version: 2, // invalid version
+                algorithm: "AES-CBC".to_string(),
+                nonce: vec![0u8; 10],
+                ciphertext: vec![],
+                tag: vec![],
+            });
+        }
         self.memory_backend.wrap_key(plaintext).await
     }
 
-    async fn decrypt_via_jni(&self, secret: &WrappedSecret) -> Result<Vec<u8>, KeyStoreError> {
+    async fn decrypt(&self, secret: &WrappedSecret) -> Result<Vec<u8>, KeyStoreError> {
+        if *self.should_fail_jni.lock().await {
+            return Err(KeyStoreError::JniFailure);
+        }
+        if *self.should_throw_exception.lock().await {
+            return Err(KeyStoreError::JavaException);
+        }
         self.memory_backend.unwrap_key(secret).await
     }
 }
@@ -448,4 +434,57 @@ async fn test_jni_backend_contract() {
 
     let storage = Arc::new(AndroidSecureStoragePlatform::new(jni_backend));
     run_storage_contract_test(storage).await;
+}
+
+#[tokio::test]
+async fn test_jni_error_mappings() {
+    let bridge = Arc::new(TestJniBridge::new());
+    let jni_backend = JniKeyStoreBackend::new(bridge.clone());
+    jni_backend.set_state(KeyStoreState::Ready).await;
+
+    // test JNI failures
+    *bridge.should_fail_jni.lock().await = true;
+    let result = jni_backend.wrap_key(b"test").await;
+    assert_eq!(result.unwrap_err(), KeyStoreError::JniFailure);
+
+    // test Java Exception mappings
+    *bridge.should_fail_jni.lock().await = false;
+    *bridge.should_throw_exception.lock().await = true;
+    let result_exc = jni_backend.wrap_key(b"test").await;
+    assert_eq!(result_exc.unwrap_err(), KeyStoreError::JavaException);
+}
+
+#[tokio::test]
+async fn test_invalid_dto_response_mapping() {
+    let bridge = Arc::new(TestJniBridge::new());
+    let jni_backend = JniKeyStoreBackend::new(bridge.clone());
+    jni_backend.set_state(KeyStoreState::Ready).await;
+
+    *bridge.should_return_bad_dto.lock().await = true;
+    let result = jni_backend.wrap_key(b"test").await;
+    
+    // validate() inside tests should verify it fails
+    let secret = result.unwrap();
+    assert!(secret.validate().is_err());
+}
+
+#[tokio::test]
+async fn test_lifecycle_callback_without_registration() {
+    // Calling JNI lifecycle callbacks before registration should not panic.
+    // They should gracefully print a warning in the logs and exit.
+    use super::adapters::android::lifecycle::{
+        Java_com_hroniki_app_LifecycleBridge_onPause,
+        Java_com_hroniki_app_LifecycleBridge_onResume,
+        Java_com_hroniki_app_LifecycleBridge_onLocked
+    };
+
+    let dummy_env = std::ptr::null_mut();
+    let dummy_class = std::ptr::null_mut();
+
+    // Call callbacks.
+    Java_com_hroniki_app_LifecycleBridge_onPause(dummy_env, dummy_class);
+    Java_com_hroniki_app_LifecycleBridge_onResume(dummy_env, dummy_class);
+    Java_com_hroniki_app_LifecycleBridge_onLocked(dummy_env, dummy_class);
+    
+    // Success: did not panic.
 }

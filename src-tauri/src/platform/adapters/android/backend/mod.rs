@@ -29,6 +29,9 @@ pub enum KeyStoreError {
     DecryptionFailed,
     BackendUnavailable,
     InvalidSecretFormat,
+    JniFailure,
+    JavaException,
+    InvalidResponse,
 }
 
 impl std::fmt::Display for KeyStoreError {
@@ -41,6 +44,9 @@ impl std::fmt::Display for KeyStoreError {
             KeyStoreError::DecryptionFailed => write!(f, "Decryption failed (auth tag mismatch)"),
             KeyStoreError::BackendUnavailable => write!(f, "KeyStore backend unavailable"),
             KeyStoreError::InvalidSecretFormat => write!(f, "Invalid wrapped secret format"),
+            KeyStoreError::JniFailure => write!(f, "JNI bridge execution failure"),
+            KeyStoreError::JavaException => write!(f, "Native Java exception occurred during execution"),
+            KeyStoreError::InvalidResponse => write!(f, "Received invalid or malformed response DTO"),
         }
     }
 }
@@ -53,11 +59,11 @@ pub trait KeyStoreBackend: Send + Sync {
     async fn unwrap_key(&self, secret: &WrappedSecret) -> Result<Vec<u8>, KeyStoreError>;
 }
 
-/// JniBridge abstracts raw JNI calls so desktop builds can mock them during tests.
+/// KeyStoreJniBridge abstracts raw JNI calls so desktop builds can mock them during tests.
 #[async_trait]
-pub trait JniBridge: Send + Sync {
-    async fn encrypt_via_jni(&self, plaintext: &[u8]) -> Result<WrappedSecret, KeyStoreError>;
-    async fn decrypt_via_jni(&self, secret: &WrappedSecret) -> Result<Vec<u8>, KeyStoreError>;
+pub trait KeyStoreJniBridge: Send + Sync {
+    async fn encrypt(&self, plaintext: &[u8]) -> Result<WrappedSecret, KeyStoreError>;
+    async fn decrypt(&self, secret: &WrappedSecret) -> Result<Vec<u8>, KeyStoreError>;
 }
 
 pub mod jni;

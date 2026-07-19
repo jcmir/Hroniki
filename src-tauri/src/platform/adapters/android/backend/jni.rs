@@ -1,15 +1,15 @@
 use std::sync::Arc;
 use async_trait::async_trait;
-use super::{KeyStoreBackend, KeyStoreError, KeyStoreState, JniBridge};
+use super::{KeyStoreBackend, KeyStoreError, KeyStoreState, KeyStoreJniBridge};
 use crate::platform::adapters::android::storage::WrappedSecret;
 
 pub struct JniKeyStoreBackend {
     state: tokio::sync::RwLock<KeyStoreState>,
-    bridge: Arc<dyn JniBridge>,
+    bridge: Arc<dyn KeyStoreJniBridge>,
 }
 
 impl JniKeyStoreBackend {
-    pub fn new(bridge: Arc<dyn JniBridge>) -> Self {
+    pub fn new(bridge: Arc<dyn KeyStoreJniBridge>) -> Self {
         Self {
             state: tokio::sync::RwLock::new(KeyStoreState::Uninitialized),
             bridge,
@@ -35,7 +35,7 @@ impl KeyStoreBackend for JniKeyStoreBackend {
             return Err(KeyStoreError::BackendUnavailable);
         }
 
-        self.bridge.encrypt_via_jni(plaintext).await
+        self.bridge.encrypt(plaintext).await
     }
 
     async fn unwrap_key(&self, secret: &WrappedSecret) -> Result<Vec<u8>, KeyStoreError> {
@@ -46,6 +46,6 @@ impl KeyStoreBackend for JniKeyStoreBackend {
             return Err(KeyStoreError::BackendUnavailable);
         }
 
-        self.bridge.decrypt_via_jni(secret).await
+        self.bridge.decrypt(secret).await
     }
 }
