@@ -1,13 +1,12 @@
-use super::adapters::{
-    DesktopNotificationPlatform, DesktopPermissionPlatform, MemorySecureStoragePlatform,
-};
+use std::sync::Arc;
+use crate::events::EventBus;
+use crate::events::DomainEvent;
 use super::context::PlatformContext;
+use super::storage::{SecretKind, SecretIdentifier, SecureStoragePlatform};
 use super::lifecycle::{LifecycleEvent, LifecycleTranslator};
 use super::permissions::PermissionKind;
-use super::storage::{SecretIdentifier, SecretKind, SecureStoragePlatform};
-use crate::events::DomainEvent;
-use crate::events::EventBus;
-use std::sync::Arc;
+use super::capabilities::PlatformCapabilities;
+use super::adapters::{DesktopNotificationPlatform, MemorySecureStoragePlatform, DesktopPermissionPlatform};
 
 #[tokio::test]
 async fn test_storage_isolation() {
@@ -26,18 +25,9 @@ async fn test_storage_isolation() {
         namespace: "user_b".to_string(),
     };
 
-    storage
-        .store(id_db.clone(), b"db_secret_key")
-        .await
-        .unwrap();
-    storage
-        .store(id_token.clone(), b"token_secret")
-        .await
-        .unwrap();
-    storage
-        .store(id_other_user.clone(), b"other_user_db_key")
-        .await
-        .unwrap();
+    storage.store(id_db.clone(), b"db_secret_key").await.unwrap();
+    storage.store(id_token.clone(), b"token_secret").await.unwrap();
+    storage.store(id_other_user.clone(), b"other_user_db_key").await.unwrap();
 
     // Verify isolation by Kind
     let loaded_db = storage.load(id_db).await.unwrap().unwrap();
@@ -49,6 +39,43 @@ async fn test_storage_isolation() {
     // Verify isolation by Namespace (User)
     let loaded_other = storage.load(id_other_user).await.unwrap().unwrap();
     assert_eq!(loaded_other, b"other_user_db_key");
+}
+
+#[tokio::test]
+async fn test_storage_thread_safety() {
+    let storage = Arc::new(MemorySecureStoragePlatform::new());
+    let mut tasks = vec![];
+
+    // Spawn 100 concurrent tasks performing read/write/verify/delete on their own namespaces
+    for i in 0..100 {
+        let storage_clone = storage.clone();
+        tasks.push(tokio::spawn(async move {
+            let namespace = format!("namespace_{}", i);
+            let id = SecretIdentifier {
+                kind: SecretKind::DatabaseKey,
+                namespace,
+            };
+            let payload = format!("payload_{}", i);
+
+            // 1. Store
+            storage_clone.store(id.clone(), payload.as_bytes()).await.unwrap();
+
+            // 2. Load and verify
+            let loaded = storage_clone.load(id.clone()).await.unwrap().unwrap();
+            assert_eq!(loaded, payload.as_bytes());
+
+            // 3. Delete
+            storage_clone.delete(id.clone()).await.unwrap();
+
+            // 4. Confirm deleted
+            let post_delete = storage_clone.load(id).await.unwrap();
+            assert!(post_delete.is_none());
+        }));
+    }
+
+    for task in tasks {
+        task.await.unwrap();
+    }
 }
 
 #[tokio::test]
@@ -69,18 +96,38 @@ async fn test_lifecycle_event_translation() {
 }
 
 #[tokio::test]
+async fn test_unknown_lifecycle_event_translation() {
+    let event_bus = Arc::new(EventBus::new());
+    let mut rx = event_bus.subscribe();
+
+    let translator = LifecycleTranslator::new(event_bus.clone());
+    translator.translate(LifecycleEvent::Unknown("onNewAndroidCallback".to_string()));
+
+    // Verify no event is translated or published to domain bus
+    tokio::select! {
+        val = rx.recv() => {
+            panic!("Expected no event to be published for Unknown lifecycle callback, got {:?}", val);
+        }
+        _ = tokio::time::sleep(tokio::time::Duration::from_millis(100)) => {
+            // Success: timed out without receiving any event
+        }
+    }
+}
+
+#[tokio::test]
 async fn test_platform_context_initialization() {
     let notifications = Arc::new(DesktopNotificationPlatform);
     let storage = Arc::new(MemorySecureStoragePlatform::new());
     let permissions = Arc::new(DesktopPermissionPlatform);
+    let capabilities = PlatformCapabilities::new(true, false, false, true);
 
-    let context = PlatformContext::new(notifications, storage, permissions);
+    let context = PlatformContext::new(notifications, storage, permissions, capabilities);
 
     // Call and check permissions
-    let status = context
-        .permissions
-        .check_permission(PermissionKind::Notifications)
-        .await
-        .unwrap();
+    let status = context.permissions.check_permission(PermissionKind::Notifications).await.unwrap();
     assert_eq!(status, super::permissions::PermissionStatus::Granted);
+
+    // Verify capabilities
+    assert!(context.capabilities.notifications);
+    assert!(!context.capabilities.biometric);
 }

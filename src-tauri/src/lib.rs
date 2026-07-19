@@ -20,7 +20,7 @@ use crate::{
         adapters::{
             DesktopNotificationPlatform, DesktopPermissionPlatform, MemorySecureStoragePlatform,
         },
-        PlatformContext,
+        PlatformContext, PlatformCapabilities,
     },
     reminder::{
         DummyNotificationProvider, ReminderScheduler, ReminderService, SqliteReminderRepository,
@@ -116,10 +116,17 @@ pub fn run() {
                 let platform_notifications = Arc::new(DesktopNotificationPlatform);
                 let platform_storage = Arc::new(MemorySecureStoragePlatform::new());
                 let platform_permissions = Arc::new(DesktopPermissionPlatform);
+                let platform_capabilities = PlatformCapabilities::new(
+                    true,  // Notifications
+                    false, // Biometric
+                    false, // SecureHardware
+                    true,  // BackgroundTasks
+                );
                 let platform_context = Arc::new(PlatformContext::new(
                     platform_notifications,
                     platform_storage,
                     platform_permissions,
+                    platform_capabilities,
                 ));
 
                 app.manage(AppState {

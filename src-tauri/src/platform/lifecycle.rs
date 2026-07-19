@@ -2,13 +2,14 @@ use crate::events::{DomainEvent, EventBus};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LifecycleEvent {
     AppStarted,
     AppBackgrounded,
     AppSuspended,
     AppResumed,
     AppClosed,
+    Unknown(String),
 }
 
 pub struct LifecycleTranslator {
@@ -22,13 +23,19 @@ impl LifecycleTranslator {
 
     pub fn translate(&self, event: LifecycleEvent) {
         let domain_event = match event {
-            LifecycleEvent::AppStarted => DomainEvent::ApplicationStarted,
-            LifecycleEvent::AppBackgrounded => DomainEvent::ApplicationSuspended,
-            LifecycleEvent::AppSuspended => DomainEvent::ApplicationSuspended,
-            LifecycleEvent::AppResumed => DomainEvent::ApplicationResumed,
-            LifecycleEvent::AppClosed => DomainEvent::ApplicationClosed,
+            LifecycleEvent::AppStarted => Some(DomainEvent::ApplicationStarted),
+            LifecycleEvent::AppBackgrounded => Some(DomainEvent::ApplicationSuspended),
+            LifecycleEvent::AppSuspended => Some(DomainEvent::ApplicationSuspended),
+            LifecycleEvent::AppResumed => Some(DomainEvent::ApplicationResumed),
+            LifecycleEvent::AppClosed => Some(DomainEvent::ApplicationClosed),
+            LifecycleEvent::Unknown(name) => {
+                tracing::warn!(event_name = ?name, "Received unknown OS lifecycle event callback");
+                None
+            }
         };
 
-        self.event_bus.publish(domain_event);
+        if let Some(de) = domain_event {
+            self.event_bus.publish(de);
+        }
     }
 }
