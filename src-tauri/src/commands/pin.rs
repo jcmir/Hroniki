@@ -66,7 +66,11 @@ pub async fn verify_pin(pin: String, state: State<'_, AppState>) -> Result<bool,
     if let (Some((hash_hex,)), Some((salt_hex,))) = (hash_row, salt_row) {
         let salt_bytes = security::from_hex(&salt_hex)?;
         let computed_hash = security::hash_pin(&pin, &salt_bytes);
-        Ok(computed_hash == hash_hex)
+        let valid = computed_hash == hash_hex;
+        if valid {
+            state.session_manager.unlock_session(&state.event_bus).await;
+        }
+        Ok(valid)
     } else {
         Ok(false)
     }

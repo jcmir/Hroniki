@@ -15,4 +15,5 @@ pub struct AppState {
     pub search_service: Arc<SearchService>,
     pub reminder_service: Arc<ReminderService>,
     pub platform_context: Arc<PlatformContext>,
+    pub session_manager: Arc<crate::platform::SessionManager>,
 }

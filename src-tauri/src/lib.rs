@@ -136,12 +136,16 @@ pub fn run() {
                     capabilities_provider,
                 ));
 
+                let session_manager = Arc::new(crate::platform::SessionManager::new());
+                session_manager.start_event_listener(&event_bus);
+
                 app.manage(AppState {
                     service: Arc::new(Mutex::new(service)),
                     event_bus,
                     search_service,
                     reminder_service,
                     platform_context,
+                    session_manager,
                 });
             });
 

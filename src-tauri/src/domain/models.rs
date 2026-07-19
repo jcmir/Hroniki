@@ -85,21 +85,39 @@ impl Entry {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MediaSource {
+    Camera,
+    Gallery,
+    ImportedFile,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Photo {
     pub id: PhotoId,
     pub entry_id: EntryId,
     pub path: String,
     pub thumbnail: String,
+    pub source: MediaSource,
     pub created_at: DateTime<Utc>,
 }
 
 impl Photo {
     pub fn new(entry_id: EntryId, path: impl Into<String>, thumbnail: impl Into<String>) -> Self {
+        Self::with_source(entry_id, path, thumbnail, MediaSource::ImportedFile)
+    }
+
+    pub fn with_source(
+        entry_id: EntryId,
+        path: impl Into<String>,
+        thumbnail: impl Into<String>,
+        source: MediaSource,
+    ) -> Self {
         Self {
             id: PhotoId::new(),
             entry_id,
             path: path.into(),
             thumbnail: thumbnail.into(),
+            source,
             created_at: Utc::now(),
         }
     }

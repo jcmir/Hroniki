@@ -408,6 +408,7 @@ impl ChronologyRepository for SqliteChronologyRepository {
                 ),
                 path,
                 thumbnail,
+                source: crate::domain::MediaSource::ImportedFile,
                 created_at: DateTime::parse_from_rfc3339(&created_at)
                     .map_err(|e| e.to_string())?
                     .with_timezone(&Utc),

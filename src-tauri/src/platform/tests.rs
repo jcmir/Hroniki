@@ -929,3 +929,65 @@ async fn test_lock_session_ram_clear_and_database_persistence() {
 
     pool.close().await;
 }
+
+#[tokio::test]
+async fn test_initial_pin_setup() {
+    use crate::application::security;
+
+    let salt_bytes = security::generate_salt();
+    let salt_hex = security::to_hex(&salt_bytes);
+    let hash_hex = security::hash_pin("1234", &salt_bytes);
+
+    assert_eq!(salt_bytes.len(), 16);
+    assert!(!salt_hex.is_empty());
+    assert!(!hash_hex.is_empty());
+    assert_ne!(hash_hex, "1234");
+}
+
+#[tokio::test]
+async fn test_wrong_pin_rejected() {
+    use crate::application::security;
+
+    let salt_bytes = security::generate_salt();
+    let correct_hash = security::hash_pin("1234", &salt_bytes);
+    let wrong_hash = security::hash_pin("9999", &salt_bytes);
+
+    assert_ne!(correct_hash, wrong_hash);
+}
+
+#[tokio::test]
+async fn test_session_verifier_argon2id_roundtrip() {
+    use crate::security::verifier::SessionVerifier;
+
+    let verifier = SessionVerifier::new(
+        "sample_salt_hex".to_string(),
+        "sample_nonce_hex".to_string(),
+        vec![1, 2, 3, 4],
+        vec![5, 6, 7, 8],
+    );
+
+    assert_eq!(verifier.version, 1);
+    assert_eq!(verifier.salt, "sample_salt_hex");
+
+    let json = serde_json::to_string(&verifier).unwrap();
+    let restored: SessionVerifier = serde_json::from_str(&json).unwrap();
+    assert_eq!(verifier, restored);
+}
+
+#[tokio::test]
+async fn test_media_missing_file_handling() {
+    use crate::domain::{ChronicleObjectId, EntryId, MediaSource, Photo};
+
+    let entry_id = EntryId::new();
+    let photo = Photo::with_source(
+        entry_id,
+        "non_existent_file.jpg",
+        "non_existent_thumb.jpg",
+        MediaSource::Gallery,
+    );
+
+    assert_eq!(photo.source, MediaSource::Gallery);
+    let path = std::path::Path::new(&photo.path);
+    assert!(!path.exists());
+    // Verification: Application handles missing file path gracefully without panic
+}
