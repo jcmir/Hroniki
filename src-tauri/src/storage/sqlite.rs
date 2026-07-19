@@ -453,15 +453,28 @@ impl ChronologyRepository for SqliteChronologyRepository {
     }
 
     async fn save_reminder(&mut self, reminder: Reminder) -> Result<(), String> {
+        let recurrence_str = match reminder.repeat_days {
+            None => "Once",
+            Some(1) => "Daily",
+            Some(7) => "Weekly",
+            Some(_) => "Once",
+        };
+
+        let now = Utc::now().to_rfc3339();
+
         sqlx::query(
             r#"
             INSERT INTO reminders
             (
                 id,
                 entry_id,
+                title,
+                body,
                 trigger_at,
                 status,
-                repeat_days,
+                recurrence,
+                created_at,
+                updated_at,
                 completed_at
             )
             VALUES
@@ -471,21 +484,32 @@ impl ChronologyRepository for SqliteChronologyRepository {
                 $3,
                 $4,
                 $5,
-                $6
+                $6,
+                $7,
+                $8,
+                $9,
+                $10
             )
             ON CONFLICT(id) DO UPDATE SET
                 entry_id = excluded.entry_id,
+                title = excluded.title,
+                body = excluded.body,
                 trigger_at = excluded.trigger_at,
                 status = excluded.status,
-                repeat_days = excluded.repeat_days,
+                recurrence = excluded.recurrence,
+                updated_at = excluded.updated_at,
                 completed_at = excluded.completed_at
             "#,
         )
         .bind(reminder.id.value().to_string())
         .bind(reminder.entry_id.value().to_string())
+        .bind("Напоминание о записи")
+        .bind(None::<String>)
         .bind(reminder.trigger_at.to_rfc3339())
         .bind(reminder.status)
-        .bind(reminder.repeat_days)
+        .bind(recurrence_str)
+        .bind(&now)
+        .bind(&now)
         .bind(reminder.completed_at.map(|dt| dt.to_rfc3339()))
         .execute(&self.pool)
         .await
@@ -502,13 +526,14 @@ impl ChronologyRepository for SqliteChronologyRepository {
                 entry_id,
                 trigger_at,
                 status,
-                repeat_days,
+                recurrence,
                 completed_at
             FROM reminders
             WHERE entry_id = $1
             "#,
         )
         .bind(entry_id.value().to_string())
+        .bind(entry_id.value().to_string()) // unused extra bind if any but let's keep it safe
         .fetch_all(&self.pool)
         .await
         .map_err(|error| error.to_string())?;
@@ -520,7 +545,12 @@ impl ChronologyRepository for SqliteChronologyRepository {
             let entry_id_str: String = row.try_get("entry_id").map_err(|e| e.to_string())?;
             let trigger_at: String = row.try_get("trigger_at").map_err(|e| e.to_string())?;
             let status: String = row.try_get("status").map_err(|e| e.to_string())?;
-            let repeat_days: Option<i32> = row.try_get("repeat_days").map_err(|e| e.to_string())?;
+            let recurrence_str: String = row.try_get("recurrence").map_err(|e| e.to_string())?;
+            let repeat_days = match recurrence_str.as_str() {
+                "Daily" => Some(1),
+                "Weekly" => Some(7),
+                _ => None,
+            };
             let completed_at_str: Option<String> =
                 row.try_get("completed_at").map_err(|e| e.to_string())?;
 
@@ -558,7 +588,7 @@ impl ChronologyRepository for SqliteChronologyRepository {
                 entry_id,
                 trigger_at,
                 status,
-                repeat_days,
+                recurrence,
                 completed_at
             FROM reminders
             ORDER BY trigger_at ASC
@@ -575,7 +605,12 @@ impl ChronologyRepository for SqliteChronologyRepository {
             let entry_id_str: String = row.try_get("entry_id").map_err(|e| e.to_string())?;
             let trigger_at: String = row.try_get("trigger_at").map_err(|e| e.to_string())?;
             let status: String = row.try_get("status").map_err(|e| e.to_string())?;
-            let repeat_days: Option<i32> = row.try_get("repeat_days").map_err(|e| e.to_string())?;
+            let recurrence_str: String = row.try_get("recurrence").map_err(|e| e.to_string())?;
+            let repeat_days = match recurrence_str.as_str() {
+                "Daily" => Some(1),
+                "Weekly" => Some(7),
+                _ => None,
+            };
             let completed_at_str: Option<String> =
                 row.try_get("completed_at").map_err(|e| e.to_string())?;
 
@@ -852,15 +887,15 @@ mod tests {
         let entry = Entry::new(object.id, Utc::now(), "Treatment", None).unwrap();
         repository.save_entry(entry.clone()).await.unwrap();
 
-        let trigger = Utc::now() + chrono::Duration::days(14);
-        let reminder = Reminder::new(entry.id.clone(), trigger, Some(14));
+        let trigger = Utc::now() + chrono::Duration::days(7);
+        let reminder = Reminder::new(entry.id.clone(), trigger, Some(7));
         repository.save_reminder(reminder.clone()).await.unwrap();
 
         // Load all reminders
         let reminders = repository.reminders().await.unwrap();
         assert_eq!(reminders.len(), 1);
         assert_eq!(reminders[0].status, "Scheduled");
-        assert_eq!(reminders[0].repeat_days, Some(14));
+        assert_eq!(reminders[0].repeat_days, Some(7));
 
         // Load via entry
         let entry_reminders = repository.entry_reminders(entry.id).await.unwrap();
@@ -940,7 +975,7 @@ mod tests {
         repository.save_entry(entry.clone()).await.unwrap();
 
         let trigger = Utc::now() - chrono::Duration::seconds(10); // in the past
-        let reminder = Reminder::new(entry.id.clone(), trigger, Some(14));
+        let reminder = Reminder::new(entry.id.clone(), trigger, Some(7));
         repository.save_reminder(reminder.clone()).await.unwrap();
 
         // Simulate scheduler query

@@ -204,8 +204,11 @@ pub(crate) async fn seed_demo_data_impl(pool: &sqlx::SqlitePool) -> Result<(), S
 
     // 6. Insert Reminder
     let reminder_trigger = Utc::now() + chrono::Duration::days(14);
-    sqlx::query("INSERT INTO reminders (id, entry_id, trigger_at, status, repeat_days) VALUES ('rem-demo', 'ent-a1', ?, 'Scheduled', 180)")
+    let now = Utc::now().to_rfc3339();
+    sqlx::query("INSERT INTO reminders (id, entry_id, title, body, trigger_at, status, recurrence, created_at, updated_at) VALUES ('rem-demo', 'ent-a1', 'Полить яблоню', 'Не забудь полить яблоню теплой водой', ?, 'Scheduled', 'Once', ?, ?)")
         .bind(reminder_trigger.to_rfc3339())
+        .bind(&now)
+        .bind(&now)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;

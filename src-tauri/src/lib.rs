@@ -7,6 +7,7 @@ pub mod domain;
 pub mod events;
 pub mod features;
 pub mod identity;
+pub mod reminder;
 pub mod search;
 pub mod security;
 pub mod storage;
@@ -14,6 +15,10 @@ pub mod storage;
 use crate::{
     app_state::AppState,
     application::chronology::ChronologyService,
+    reminder::{
+        DummyNotificationProvider, ReminderScheduler, ReminderService, ReminderSubscriber,
+        SqliteReminderRepository,
+    },
     search::{SearchService, SearchSubscriber, SqliteSearchRepository},
     storage::{connection::create_pool, SqliteChronologyRepository},
 };
@@ -68,10 +73,11 @@ pub fn run() {
                 .await
                 .expect("failed to initialize application");
 
-                crate::application::bootstrap::start_reminder_scheduler(
-                    pool.clone(),
-                    app_handle.clone(),
-                );
+                // Disabled old scheduler
+                // crate::application::bootstrap::start_reminder_scheduler(
+                //     pool.clone(),
+                //     app_handle.clone(),
+                // );
 
                 let event_bus = Arc::new(crate::events::EventBus::new());
 
@@ -92,10 +98,23 @@ pub fn run() {
                     SearchSubscriber::new(event_bus.clone(), search_service.clone(), pool.clone());
                 search_subscriber.start();
 
+                // Initialize new Reminder Service, Scheduler, Subscriber
+                let reminder_repo = Arc::new(SqliteReminderRepository::new(pool.clone()));
+                let reminder_service = Arc::new(ReminderService::new(reminder_repo.clone()));
+                let notification_provider = Arc::new(DummyNotificationProvider);
+                let reminder_scheduler =
+                    ReminderScheduler::new(reminder_repo, notification_provider);
+                reminder_scheduler.start();
+
+                let reminder_subscriber =
+                    ReminderSubscriber::new(event_bus.clone(), reminder_service.clone());
+                reminder_subscriber.start();
+
                 app.manage(AppState {
                     service: Arc::new(Mutex::new(service)),
                     event_bus,
                     search_service,
+                    reminder_service,
                 });
             });
 
@@ -121,6 +140,10 @@ pub fn run() {
             commands::reminders::get_reminders,
             commands::reminders::complete_reminder,
             commands::reminders::snooze_reminder,
+            commands::reminder::create_reminder_v2,
+            commands::reminder::cancel_reminder_v2,
+            commands::reminder::complete_reminder_v2,
+            commands::reminder::get_active_reminders_v2,
             commands::pin::is_pin_configured,
             commands::pin::set_pin,
             commands::pin::verify_pin,

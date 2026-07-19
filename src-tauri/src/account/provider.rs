@@ -61,8 +61,8 @@ impl AccountProvider for LocalAccountProvider {
         }
 
         let user_id = Uuid::new_v4().to_string();
-        let password_hash = crate::security::password::hash_password(password)
-            .map_err(IdentityError::Crypto)?;
+        let password_hash =
+            crate::security::password::hash_password(password).map_err(IdentityError::Crypto)?;
 
         let user = User {
             id: user_id,

@@ -5,5 +5,6 @@ pub mod media;
 pub mod objects;
 pub mod onboarding;
 pub mod pin;
+pub mod reminder;
 pub mod reminders;
 pub mod search;

@@ -262,9 +262,7 @@ impl crate::features::repository::SubscriptionRepository for SqliteIdentityRepos
             let plan_str: String = r
                 .try_get("plan")
                 .map_err(|e| IdentityError::Storage(e.to_string()))?;
-            Ok(crate::features::models::SubscriptionPlan::parse(
-                &plan_str,
-            ))
+            Ok(crate::features::models::SubscriptionPlan::parse(&plan_str))
         } else {
             Ok(crate::features::models::SubscriptionPlan::Free)
         }
