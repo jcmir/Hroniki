@@ -55,7 +55,6 @@
     <nav class="nav-tabs">
       <a href="/" class="tab-link">Лента</a>
       <a href="/objects" class="tab-link active">Объекты</a>
-      <a href="/reminders" class="tab-link">Напоминания</a>
       <a href="/settings" class="tab-link">Настройки</a>
     </nav>
   </header>

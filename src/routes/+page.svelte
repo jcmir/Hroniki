@@ -9,18 +9,26 @@
   import PINLockModal from '$lib/components/PINLockModal.svelte';
   import FilterBar from '$lib/components/FilterBar.svelte';
   import MemoryRepeatBanner from '$lib/components/MemoryRepeatBanner.svelte';
+  import SplashScreen from '$lib/components/SplashScreen.svelte';
+  import FirstRunWizard from '$lib/components/FirstRunWizard.svelte';
   import DateChip from '$lib/design/DateChip.svelte';
   import TimelineEntry from '$lib/design/TimelineEntry.svelte';
   import EmptyState from '$lib/design/EmptyState.svelte';
   import FloatingActionButton from '$lib/design/FloatingActionButton.svelte';
 
   let showCreateModal = false;
+  let showSplash = true;
+  let showWizard = false;
 
   onMount(async () => {
     await sessionStore.init();
     await platformStore.loadCapabilities();
     await categoriesStore.loadCategories();
     await entriesStore.loadEntries();
+    // Show first-run wizard if app is fresh
+    if ($entriesStore.entries.length === 0) {
+      showWizard = true;
+    }
   });
 
   function handleLockApp() {
@@ -37,13 +45,14 @@
         <h1>ХРОНИКИ</h1>
         <span class="sub-text">Архив Воспоминаний</span>
       </div>
-      <span class="version-chip">Beta 0.2.0</span>
+      <span class="version-chip">Beta 0.2.1</span>
     </div>
 
     <!-- Navigation Tabs -->
     <nav class="nav-tabs">
       <a href="/" class="tab-link active">Лента</a>
       <a href="/objects" class="tab-link">Объекты</a>
+      <a href="/reminders" class="tab-link">Напоминания</a>
       <a href="/settings" class="tab-link">Настройки</a>
     </nav>
   </header>
@@ -100,6 +109,14 @@
     <PINLockModal />
   {/if}
 </div>
+
+{#if showSplash}
+  <SplashScreen on:done={() => (showSplash = false)} />
+{/if}
+
+{#if showWizard && !showSplash}
+  <FirstRunWizard on:complete={() => (showWizard = false)} />
+{/if}
 
 <style>
   .journal-app {

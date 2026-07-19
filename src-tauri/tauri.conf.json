@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "ХРОНИКИ",
-  "version": "0.2.0-beta",
-  "identifier": "app.hroniki.desktop",
+  "version": "0.2.1-beta",
+  "identifier": "app.hroniki.mobile",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",

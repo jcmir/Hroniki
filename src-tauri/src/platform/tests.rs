@@ -1284,3 +1284,146 @@ async fn test_object_details_query() {
 
     pool.close().await;
 }
+
+#[tokio::test]
+async fn test_demo_experience_service() {
+    use crate::domain::{Category, ChronicleObject, Entry};
+    use crate::storage::{
+        connection::create_pool, migrations::run_migrations, ChronologyRepository,
+        SqliteChronologyRepository,
+    };
+
+    let temp_file = std::env::temp_dir().join(format!(
+        "hroniki_demo_service_test_{}.sqlite",
+        uuid::Uuid::new_v4()
+    ));
+    let db_url = format!(
+        "sqlite://{}",
+        temp_file.to_string_lossy().replace('\\', "/")
+    );
+
+    let pool = create_pool(&db_url).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let mut repo = SqliteChronologyRepository::new(pool.clone());
+
+    // Simulate seeding 2 demo categories and objects
+    let cat_auto = Category::new("Автомобили".to_string()).unwrap();
+    repo.save_category(cat_auto.clone()).await.unwrap();
+    let cat_home = Category::new("Дом и Дача".to_string()).unwrap();
+    repo.save_category(cat_home.clone()).await.unwrap();
+
+    let obj_bmw =
+        ChronicleObject::new(cat_auto.id, "BMW X5", Some("Семейная машина".to_string())).unwrap();
+    repo.save_object(obj_bmw.clone()).await.unwrap();
+    let obj_home = ChronicleObject::new(
+        cat_home.id,
+        "Дом в Завидово",
+        Some("Дача и сад".to_string()),
+    )
+    .unwrap();
+    repo.save_object(obj_home.clone()).await.unwrap();
+
+    let entry_bmw = Entry::new(
+        obj_bmw.id,
+        chrono::Utc::now(),
+        "ТО и замена масла 5w30".to_string(),
+        None,
+    )
+    .unwrap();
+    repo.save_entry_with_photos(entry_bmw, vec![])
+        .await
+        .unwrap();
+    let entry_home = Entry::new(
+        obj_home.id,
+        chrono::Utc::now(),
+        "Обработка сада от вредителей".to_string(),
+        None,
+    )
+    .unwrap();
+    repo.save_entry_with_photos(entry_home, vec![])
+        .await
+        .unwrap();
+
+    // Verify seeded objects and entries
+    let objects = repo.objects().await.unwrap();
+    assert_eq!(
+        objects.len(),
+        2,
+        "Demo seeding should create exactly 2 objects"
+    );
+    let entries = repo.entries().await.unwrap();
+    assert_eq!(
+        entries.len(),
+        2,
+        "Demo seeding should create exactly 2 entries"
+    );
+
+    let categories = repo.categories().await.unwrap();
+    assert_eq!(
+        categories.len(),
+        2,
+        "Demo seeding should create exactly 2 categories"
+    );
+
+    pool.close().await;
+}
+
+#[tokio::test]
+async fn test_memory_center_retrieval() {
+    use crate::domain::{Category, ChronicleObject, Entry, Reminder};
+    use crate::storage::{
+        connection::create_pool, migrations::run_migrations, ChronologyRepository,
+        SqliteChronologyRepository,
+    };
+    use chrono::{Duration, Utc};
+
+    let temp_file = std::env::temp_dir().join(format!(
+        "hroniki_memory_center_test_{}.sqlite",
+        uuid::Uuid::new_v4()
+    ));
+    let db_url = format!(
+        "sqlite://{}",
+        temp_file.to_string_lossy().replace('\\', "/")
+    );
+
+    let pool = create_pool(&db_url).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let mut repo = SqliteChronologyRepository::new(pool.clone());
+
+    let cat = Category::new("Автомобили".to_string()).unwrap();
+    repo.save_category(cat.clone()).await.unwrap();
+    let obj = ChronicleObject::new(cat.id, "BMW X5", None).unwrap();
+    repo.save_object(obj.clone()).await.unwrap();
+
+    // Entry from 1 year ago — should appear in on_this_day section
+    let one_year_ago = Utc::now() - Duration::days(365);
+    let entry_past = Entry::new(
+        obj.id,
+        one_year_ago,
+        "Замена тормозных колодок".to_string(),
+        None,
+    )
+    .unwrap();
+    repo.save_entry_with_photos(entry_past.clone(), vec![])
+        .await
+        .unwrap();
+
+    // Upcoming reminder — 10 days in the future
+    let upcoming_trigger = Utc::now() + Duration::days(10);
+    let reminder = Reminder::new(entry_past.id, upcoming_trigger, None);
+    repo.save_reminder(reminder).await.unwrap();
+
+    // Verify entries and reminders exist
+    let entries = repo.entries().await.unwrap();
+    assert!(
+        !entries.is_empty(),
+        "Memory center test: entry should exist"
+    );
+    let reminders = repo.reminders().await.unwrap();
+    assert!(
+        !reminders.is_empty(),
+        "Memory center test: upcoming reminder should exist"
+    );
+
+    pool.close().await;
+}

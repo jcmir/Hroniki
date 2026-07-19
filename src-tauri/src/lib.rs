@@ -187,6 +187,9 @@ pub fn run() {
             commands::onboarding::seed_demo_data,
             commands::onboarding::get_username,
             commands::search::fts_search,
+            commands::demo_experience::seed_demo_dataset,
+            commands::reminder::get_memory_center,
+            commands::objects::get_object_details,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
