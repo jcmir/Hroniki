@@ -9,6 +9,8 @@
   import EntryDetail from '$lib/components/EntryDetail.svelte';
   import PinLockScreen from '$lib/components/PinLockScreen.svelte';
   import OnboardingScreen from '$lib/components/OnboardingScreen.svelte';
+  import ObjectCard from '$lib/components/ObjectCard.svelte';
+  import ObjectChronicle from '$lib/components/ObjectChronicle.svelte';
   import { mockInvoke } from '$lib/mock/mockRepository';
 
   // State variables from DB
@@ -524,8 +526,8 @@
               <p>Создайте первую запись: сад, авто, дом или другое важное событие.</p>
             </div>
           {:else}
-            {#each entries as item (item.id)}
-              <TimelineCard {...item} onClick={handleCardClick} />
+            {#each entries as item, i (item.id)}
+              <TimelineCard {...item} index={i} onClick={handleCardClick} />
             {/each}
           {/if}
         </div>
@@ -534,61 +536,16 @@
       <!-- Objects Tab -->
       <section class="objects-section" in:fade={{ duration: 200 }}>
         {#if selectedObjectForChronicle}
-          <!-- Object Chronicle Detailed View -->
-          <div class="chronicle-view" in:fade={{ duration: 150 }}>
-            <button type="button" class="back-link-btn" onclick={clearObjectChronicle}>
-              ← К списку объектов
-            </button>
-
-            <div class="object-hero">
-              <div class="object-avatar-wrapper">
-                <span class="object-avatar-emoji">🌱</span>
-              </div>
-              <h2 class="object-title">{selectedObjectForChronicle.name}</h2>
-              <span class="object-category-badge">🌱 {categories.find(c => c.id === selectedObjectForChronicle.category_id)?.name || 'Категория'}</span>
-              {#if selectedObjectStats}
-                <span class="object-meta">В архиве {selectedObjectStats.age_days} дней</span>
-              {/if}
-            </div>
-
-            <!-- Statistics Cards -->
-            {#if selectedObjectStats}
-              <div class="stats-row">
-                <div class="stat-card">
-                  <span class="stat-value">{selectedObjectStats.total_entries}</span>
-                  <span class="stat-label">Событий</span>
-                </div>
-                <div class="stat-card">
-                  <span class="stat-value">{selectedObjectStats.total_photos}</span>
-                  <span class="stat-label">Фотографий</span>
-                </div>
-                <div class="stat-card">
-                  <span class="stat-value">
-                    {#if selectedObjectStats.next_reminder_date}
-                      {new Date(selectedObjectStats.next_reminder_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
-                    {:else}
-                      —
-                    {/if}
-                  </span>
-                  <span class="stat-label">Напоминание</span>
-                </div>
-              </div>
-            {/if}
-
-            <h3 class="section-title">Временная шкала объекта</h3>
-            <div class="timeline-container">
-              <div class="timeline-axis"></div>
-              {#if selectedObjectEntries.length === 0}
-                <p class="empty-label">Нет записей для этого объекта.</p>
-              {:else}
-                {#each selectedObjectEntries as item (item.id)}
-                  <TimelineCard {...item} onClick={handleCardClick} />
-                {/each}
-              {/if}
-            </div>
-          </div>
+          <ObjectChronicle
+            object={selectedObjectForChronicle}
+            stats={selectedObjectStats}
+            entries={selectedObjectEntries}
+            {categories}
+            onBack={clearObjectChronicle}
+            onCardClick={handleCardClick}
+          />
         {:else}
-          <!-- Objects List View -->
+          <!-- Objects List -->
           <h2 class="section-title">Ваши объекты</h2>
           {#if objects.length === 0}
             <div class="empty-tab">
@@ -598,15 +555,14 @@
             </div>
           {:else}
             <div class="objects-grid">
-              {#each objects as obj}
-                <button type="button" class="object-list-card" onclick={() => selectObjectForChronicle(obj)}>
-                  <div class="object-list-card-icon">🌱</div>
-                  <div class="object-list-card-details">
-                    <span class="object-list-card-name">{obj.name}</span>
-                    <span class="object-list-card-desc">{obj.description || 'Без описания'}</span>
-                  </div>
-                  <span class="object-list-card-arrow">→</span>
-                </button>
+              {#each objects as obj, i}
+                <ObjectCard
+                  object={obj}
+                  categoryName={categories.find((c: any) => c.id === obj.category_id)?.name ?? ''}
+                  entryCount={entries.filter((e: any) => e.object_id === obj.id).length}
+                  index={i}
+                  onSelect={selectObjectForChronicle}
+                />
               {/each}
             </div>
           {/if}
@@ -1172,81 +1128,6 @@
     line-height: 1.4;
   }
 
-  /* Objects Section */
-  .object-hero {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 28px 0;
-    text-align: center;
-  }
-
-  .object-avatar-wrapper {
-    width: 96px;
-    height: 96px;
-    border-radius: 50%;
-    overflow: hidden;
-    border: 4px solid white;
-    box-shadow: 0 8px 24px rgba(96, 37, 255, 0.15);
-    margin-bottom: 16px;
-  }
-
-  .object-avatar {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  .object-title {
-    font-size: 1.5rem;
-    font-weight: 700;
-    margin-bottom: 6px;
-  }
-
-  .object-category-badge {
-    padding: 4px 12px;
-    border-radius: 12px;
-    background: var(--accent-green-bg);
-    color: var(--accent-green);
-    font-size: 0.8rem;
-    font-weight: 600;
-    margin-bottom: 8px;
-  }
-
-  .object-meta {
-    font-size: 0.78rem;
-    color: var(--muted);
-  }
-
-  .stats-row {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 28px;
-  }
-
-  .stat-card {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    background: var(--surface-opaque);
-    border-radius: var(--radius-lg);
-    padding: 16px;
-    box-shadow: var(--card-shadow);
-  }
-
-  .stat-value {
-    font-size: 1.35rem;
-    font-weight: 700;
-    color: var(--primary-purple);
-  }
-
-  .stat-label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--muted);
-    margin-top: 4px;
-  }
 
   .section-title {
     font-size: 1.1rem;
@@ -1254,6 +1135,15 @@
     margin-bottom: 16px;
     color: var(--text);
   }
+
+  /* Objects Grid wrapper (layout only) */
+  .objects-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 8px;
+  }
+
 
   .reminders-section {
     width: 100%;
@@ -1347,12 +1237,7 @@
     color: var(--primary-purple);
   }
 
-  .empty-label {
-    text-align: center;
-    color: var(--muted);
-    padding: 20px;
-    font-size: 0.9rem;
-  }
+
 
   /* Settings */
   .settings-list {
@@ -1788,84 +1673,6 @@
     background: rgba(96, 37, 255, 0.1);
   }
 
-  /* Objects Grid & Card */
-  .objects-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-top: 8px;
-  }
-  .object-list-card {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    background: var(--surface-opaque);
-    border-radius: var(--radius-lg);
-    padding: 16px;
-    border: none;
-    box-shadow: var(--card-shadow);
-    text-align: left;
-    cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s;
-    width: 100%;
-  }
-  .object-list-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 16px 40px rgba(96, 37, 255, 0.12);
-  }
-  .object-list-card-icon {
-    font-size: 1.8rem;
-    background: var(--light-gray);
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-  .object-list-card-details {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-width: 0;
-  }
-  .object-list-card-name {
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--text);
-  }
-  .object-list-card-desc {
-    font-size: 0.78rem;
-    color: var(--muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .object-list-card-arrow {
-    font-size: 1.2rem;
-    color: var(--muted);
-  }
-
-  /* Detailed Chronicle View styling */
-  .chronicle-view {
-    display: flex;
-    flex-direction: column;
-  }
-  .back-link-btn {
-    border: none;
-    background: none;
-    color: var(--primary-purple);
-    font-size: 0.85rem;
-    font-weight: 600;
-    cursor: pointer;
-    text-align: left;
-    margin-bottom: 12px;
-    padding: 4px 0;
-    align-self: flex-start;
-  }
-  .object-avatar-emoji {
-    font-size: 3rem;
-  }
 
   .settings-action-btn {
     border: none;

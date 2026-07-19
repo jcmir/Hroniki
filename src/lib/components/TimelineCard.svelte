@@ -1,5 +1,6 @@
 <script lang="ts">
   import Card from './Card.svelte';
+  import { fly } from 'svelte/transition';
 
   interface Props {
     id: string;
@@ -11,6 +12,7 @@
     images?: string[];
     tags?: string[];
     reminderText?: string;
+    index?: number;
     onClick?: (id: string) => void;
   }
 
@@ -24,6 +26,7 @@
     images = [],
     tags = [],
     reminderText = '',
+    index = 0,
     onClick
   }: Props = $props();
 
@@ -36,7 +39,10 @@
   };
 </script>
 
-<div class="timeline-item {themeClasses[categoryTheme]}">
+<div
+  class="timeline-item {themeClasses[categoryTheme]}"
+  in:fly={{ y: 14, duration: 300, delay: index * 55 }}
+>
   <!-- Left Side: Date / Timeline Line -->
   <div class="timeline-left">
     <div class="timeline-dot"></div>
