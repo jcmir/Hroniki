@@ -19,6 +19,8 @@ export interface EntryDto {
 
 export interface EntriesStoreData {
     entries: EntryDto[];
+    searchQuery: string;
+    selectedCategoryId: string | null;
     loading: boolean;
     error: string | null;
 }
@@ -26,6 +28,8 @@ export interface EntriesStoreData {
 function createEntriesStore() {
     const { subscribe, set, update } = writable<EntriesStoreData>({
         entries: [],
+        searchQuery: '',
+        selectedCategoryId: null,
         loading: false,
         error: null,
     });
@@ -45,6 +49,28 @@ function createEntriesStore() {
                     loading: false,
                     error: typeof err === 'string' ? err : 'Ошибка загрузки записей',
                 }));
+            }
+        },
+
+        async searchEntries(queryText?: string, categoryId?: string) {
+            update(s => ({
+                ...s,
+                searchQuery: queryText !== undefined ? queryText : s.searchQuery,
+                selectedCategoryId: categoryId !== undefined ? categoryId : s.selectedCategoryId,
+                loading: true,
+            }));
+
+            try {
+                const list = await invoke<EntryDto[]>('search_entries', {
+                    queryText: queryText || null,
+                    categoryId: categoryId || null,
+                    objectId: null,
+                    startDate: null,
+                    endDate: null,
+                });
+                update(s => ({ ...s, entries: list || [], loading: false }));
+            } catch {
+                update(s => ({ ...s, loading: false }));
             }
         },
 

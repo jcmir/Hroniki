@@ -227,9 +227,18 @@ impl ChronologyRepository for SqliteChronologyRepository {
             let name: String = row.try_get("name").map_err(|e| e.to_string())?;
             let created_at: String = row.try_get("created_at").map_err(|e| e.to_string())?;
 
+            let icon: String = row.try_get("icon").unwrap_or_else(|_| "✨".to_string());
+            let color: String = row
+                .try_get("color")
+                .unwrap_or_else(|_| "#F59E0B".to_string());
+            let system_type: Option<String> = row.try_get("system_type").ok();
+
             result.push(Category {
                 id: CategoryId::from(uuid::Uuid::parse_str(&id).map_err(|e| e.to_string())?),
                 name,
+                icon,
+                color,
+                system_type,
                 created_at: DateTime::parse_from_rfc3339(&created_at)
                     .map_err(|e| e.to_string())?
                     .with_timezone(&Utc),

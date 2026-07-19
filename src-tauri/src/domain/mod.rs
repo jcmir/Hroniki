@@ -4,4 +4,4 @@ mod models;
 
 pub use error::DomainError;
 pub use ids::{CategoryId, ChronicleObjectId, EntryId, PhotoId, ReminderId};
-pub use models::{Category, ChronicleObject, Entry, MediaSource, Photo, Reminder};
+pub use models::{Category, ChronicleObject, Entry, MediaSource, MemoryReminder, Photo, Reminder};

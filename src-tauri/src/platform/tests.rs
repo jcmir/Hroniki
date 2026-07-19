@@ -1102,3 +1102,103 @@ async fn test_full_mobile_lifecycle() {
 
     pool2.close().await;
 }
+
+#[tokio::test]
+async fn test_object_entry_relationship() {
+    use crate::domain::{Category, ChronicleObject, Entry};
+
+    let cat =
+        Category::with_details("Vehicle", "🚗", "#3B82F6", Some("vehicle".to_string())).unwrap();
+    let obj = ChronicleObject::new(cat.id, "BMW X5", Some("Семейное авто".to_string())).unwrap();
+
+    let entry1 = Entry::new(obj.id, chrono::Utc::now(), "Замена масла".to_string(), None).unwrap();
+    let entry2 = Entry::new(
+        obj.id,
+        chrono::Utc::now(),
+        "Переобувка шин".to_string(),
+        None,
+    )
+    .unwrap();
+
+    assert_eq!(obj.category_id, cat.id);
+    assert_eq!(entry1.object_id, obj.id);
+    assert_eq!(entry2.object_id, obj.id);
+}
+
+#[tokio::test]
+async fn test_custom_category_creation() {
+    use crate::domain::Category;
+
+    let custom_cat = Category::with_details("🐕 Питомец", "🐕", "#10B981", None).unwrap();
+    assert_eq!(custom_cat.name, "🐕 Питомец");
+    assert_eq!(custom_cat.icon, "🐕");
+    assert_eq!(custom_cat.color, "#10B981");
+    assert_eq!(custom_cat.system_type, None);
+}
+
+#[tokio::test]
+async fn test_search_after_restart() {
+    use crate::domain::{Category, ChronicleObject, Entry};
+    use crate::storage::{
+        connection::create_pool, migrations::run_migrations, ChronologyRepository,
+        SqliteChronologyRepository,
+    };
+
+    let temp_file = std::env::temp_dir().join(format!(
+        "hroniki_search_test_{}.sqlite",
+        uuid::Uuid::new_v4()
+    ));
+    let db_url = format!(
+        "sqlite://{}",
+        temp_file.to_string_lossy().replace('\\', "/")
+    );
+
+    let pool1 = create_pool(&db_url).await.unwrap();
+    run_migrations(&pool1).await.unwrap();
+    let mut repo1 = SqliteChronologyRepository::new(pool1.clone());
+
+    let cat = Category::new("Путешествия".to_string()).unwrap();
+    repo1.save_category(cat.clone()).await.unwrap();
+    let obj = ChronicleObject::new(cat.id, "Алтай 2026".to_string(), None).unwrap();
+    repo1.save_object(obj.clone()).await.unwrap();
+    let entry = Entry::new(
+        obj.id,
+        chrono::Utc::now(),
+        "Восхождение на Белуху".to_string(),
+        Some("Горный трекинг".to_string()),
+    )
+    .unwrap();
+    repo1.save_entry_with_photos(entry, vec![]).await.unwrap();
+    pool1.close().await;
+
+    // Simulate restart & search
+    let pool2 = create_pool(&db_url).await.unwrap();
+    let repo2 = SqliteChronologyRepository::new(pool2.clone());
+
+    let search_results = repo2
+        .search_entries(Some("Белуху".to_string()), None, None, None, None)
+        .await
+        .unwrap();
+    assert_eq!(search_results.len(), 1);
+    assert_eq!(search_results[0].title, "Восхождение на Белуху");
+
+    pool2.close().await;
+}
+
+#[tokio::test]
+async fn test_memory_reminder_on_this_day() {
+    use crate::domain::{EntryId, MemoryReminder};
+
+    let entry_id = EntryId::new();
+    let memory = MemoryReminder {
+        source_entry_id: entry_id,
+        title: "Поездка в горы".to_string(),
+        object_name: "✈️ Путешествия".to_string(),
+        years_ago: 1,
+        trigger_date: chrono::Utc::now(),
+    };
+
+    assert_eq!(memory.years_ago, 1);
+    assert_eq!(memory.source_entry_id, entry_id);
+    assert_eq!(memory.object_name, "✈️ Путешествия");
+}

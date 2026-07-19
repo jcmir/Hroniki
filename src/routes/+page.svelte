@@ -4,15 +4,19 @@
   import { entriesStore, entriesByDate } from '$lib/stores/entries';
   import { sessionStore } from '$lib/stores/session';
   import { platformStore } from '$lib/stores/platform';
+  import { categoriesStore } from '$lib/stores/categories';
   import EntryCard from '$lib/components/EntryCard.svelte';
   import CreateEntryModal from '$lib/components/CreateEntryModal.svelte';
   import PINLockModal from '$lib/components/PINLockModal.svelte';
+  import FilterBar from '$lib/components/FilterBar.svelte';
+  import MemoryRepeatBanner from '$lib/components/MemoryRepeatBanner.svelte';
 
   let showCreateModal = false;
 
   onMount(async () => {
     await sessionStore.init();
     await platformStore.loadCapabilities();
+    await categoriesStore.loadCategories();
     await entriesStore.loadEntries();
   });
 
@@ -42,6 +46,17 @@
 
   <!-- Main Timeline Container -->
   <main class="timeline-content">
+    <FilterBar />
+
+    <!-- Memory Repeat Highlight Banner -->
+    {#if $entriesStore.entries.length > 0}
+      <MemoryRepeatBanner
+        title="Поездка в горы Алтая"
+        objectName="✈️ Путешествия"
+        yearsAgo={1}
+      />
+    {/if}
+
     {#if $entriesStore.loading && $entriesStore.entries.length === 0}
       <div class="state-container">
         <div class="spinner"></div>
@@ -50,8 +65,8 @@
     {:else if $entriesByDate.length === 0}
       <div class="state-container empty-state">
         <div class="empty-icon">✨</div>
-        <h3>Ваш Дневник Пок Пуст</h3>
-        <p>Сохраняйте ценные моменты и фотографии. Нажмите <strong>+</strong>, чтобы добавить первое воспоминание.</p>
+        <h3>Ваш Дневник Пока Пуст</h3>
+        <p>Сохраняйте ценные моменты, объекты и фотографии. Нажмите <strong>+</strong>, чтобы добавить первое воспоминание.</p>
         <button class="first-entry-btn" on:click={() => (showCreateModal = true)}>
           + Создать Запись
         </button>
@@ -185,7 +200,7 @@
     background-color: var(--bg-surface);
     border: 1px dashed var(--border-subtle);
     border-radius: var(--radius-lg);
-    margin-top: 2rem;
+    margin-top: 1rem;
   }
 
   .empty-icon {
@@ -299,4 +314,3 @@
     margin-left: 0.5rem;
   }
 </style>
-

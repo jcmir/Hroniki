@@ -7,16 +7,31 @@ use super::{CategoryId, ChronicleObjectId, DomainError, EntryId, PhotoId, Remind
 pub struct Category {
     pub id: CategoryId,
     pub name: String,
+    pub icon: String,
+    pub color: String,
+    pub system_type: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 
 impl Category {
     pub fn new(name: impl Into<String>) -> Result<Self, DomainError> {
+        Self::with_details(name, "✨", "#F59E0B", None)
+    }
+
+    pub fn with_details(
+        name: impl Into<String>,
+        icon: impl Into<String>,
+        color: impl Into<String>,
+        system_type: Option<String>,
+    ) -> Result<Self, DomainError> {
         let name = validate_required_text(name.into(), "category.name")?;
 
         Ok(Self {
             id: CategoryId::new(),
             name,
+            icon: icon.into(),
+            color: color.into(),
+            system_type,
             created_at: Utc::now(),
         })
     }
@@ -144,6 +159,15 @@ impl Reminder {
             completed_at: None,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MemoryReminder {
+    pub source_entry_id: EntryId,
+    pub title: String,
+    pub object_name: String,
+    pub years_ago: u32,
+    pub trigger_date: DateTime<Utc>,
 }
 
 fn validate_required_text(value: String, field: &'static str) -> Result<String, DomainError> {
