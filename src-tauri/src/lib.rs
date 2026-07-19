@@ -120,6 +120,7 @@ pub fn run() {
                     true,  // Notifications
                     false, // Biometric
                     false, // SecureHardware
+                    false, // StrongBox
                     true,  // BackgroundTasks
                 );
                 let platform_context = Arc::new(PlatformContext::new(

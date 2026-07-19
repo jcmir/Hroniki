@@ -43,7 +43,9 @@ impl AndroidLifecyclePlatform {
 static ANDROID_LIFECYCLE: OnceLock<Arc<AndroidLifecyclePlatform>> = OnceLock::new();
 
 pub fn register_lifecycle(lifecycle: Arc<AndroidLifecyclePlatform>) -> Result<(), &'static str> {
-    ANDROID_LIFECYCLE.set(lifecycle).map_err(|_| "Lifecycle already registered")
+    ANDROID_LIFECYCLE
+        .set(lifecycle)
+        .map_err(|_| "Lifecycle already registered")
 }
 
 pub fn get_lifecycle() -> Option<&'static Arc<AndroidLifecyclePlatform>> {

@@ -1,6 +1,6 @@
+use crate::platform::adapters::android::storage::WrappedSecret;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use crate::platform::adapters::android::storage::WrappedSecret;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EncryptionAlgorithm {
@@ -45,8 +45,12 @@ impl std::fmt::Display for KeyStoreError {
             KeyStoreError::BackendUnavailable => write!(f, "KeyStore backend unavailable"),
             KeyStoreError::InvalidSecretFormat => write!(f, "Invalid wrapped secret format"),
             KeyStoreError::JniFailure => write!(f, "JNI bridge execution failure"),
-            KeyStoreError::JavaException => write!(f, "Native Java exception occurred during execution"),
-            KeyStoreError::InvalidResponse => write!(f, "Received invalid or malformed response DTO"),
+            KeyStoreError::JavaException => {
+                write!(f, "Native Java exception occurred during execution")
+            }
+            KeyStoreError::InvalidResponse => {
+                write!(f, "Received invalid or malformed response DTO")
+            }
         }
     }
 }

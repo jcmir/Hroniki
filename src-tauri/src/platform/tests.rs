@@ -1,8 +1,8 @@
 use super::adapters::android::backend::{
-    KeyStoreBackend, KeyStoreError, MemoryKeyStoreBackend, JniKeyStoreBackend, KeyStoreState, KeyStoreJniBridge,
+    JniKeyStoreBackend, KeyStoreBackend, KeyStoreError, KeyStoreJniBridge, KeyStoreState,
+    MemoryKeyStoreBackend,
 };
 use super::adapters::android::storage::WrappedSecret;
-use async_trait::async_trait;
 use super::adapters::{
     android::lifecycle::PlatformLifecycleEvent, AndroidLifecyclePlatform,
     AndroidSecureStoragePlatform, DesktopNotificationPlatform, DesktopPermissionPlatform,
@@ -15,6 +15,7 @@ use super::permissions::PermissionKind;
 use super::storage::{SecretIdentifier, SecretKind, SecureStoragePlatform};
 use crate::events::DomainEvent;
 use crate::events::EventBus;
+use async_trait::async_trait;
 use std::sync::Arc;
 
 // 1. Storage Contract Verification Helper
@@ -118,7 +119,10 @@ async fn test_wrapped_secret_validation() {
         ciphertext: vec![1, 2, 3],
         tag: vec![0u8; 16],
     };
-    assert_eq!(bad_nonce.validate().unwrap_err(), KeyStoreError::InvalidSecretFormat);
+    assert_eq!(
+        bad_nonce.validate().unwrap_err(),
+        KeyStoreError::InvalidSecretFormat
+    );
 
     // 2. Tag length != 16 validation
     let bad_tag = WrappedSecret {
@@ -128,7 +132,10 @@ async fn test_wrapped_secret_validation() {
         ciphertext: vec![1, 2, 3],
         tag: vec![0u8; 15], // 15 bytes instead of 16
     };
-    assert_eq!(bad_tag.validate().unwrap_err(), KeyStoreError::InvalidSecretFormat);
+    assert_eq!(
+        bad_tag.validate().unwrap_err(),
+        KeyStoreError::InvalidSecretFormat
+    );
 
     // 3. Algorithm validation
     let bad_algo = WrappedSecret {
@@ -138,7 +145,10 @@ async fn test_wrapped_secret_validation() {
         ciphertext: vec![1, 2, 3],
         tag: vec![0u8; 16],
     };
-    assert_eq!(bad_algo.validate().unwrap_err(), KeyStoreError::InvalidSecretFormat);
+    assert_eq!(
+        bad_algo.validate().unwrap_err(),
+        KeyStoreError::InvalidSecretFormat
+    );
 
     // 4. Version validation
     let bad_version = WrappedSecret {
@@ -148,7 +158,10 @@ async fn test_wrapped_secret_validation() {
         ciphertext: vec![1, 2, 3],
         tag: vec![0u8; 16],
     };
-    assert_eq!(bad_version.validate().unwrap_err(), KeyStoreError::InvalidVersion(999));
+    assert_eq!(
+        bad_version.validate().unwrap_err(),
+        KeyStoreError::InvalidVersion(999)
+    );
 
     // 5. Empty struct does not panic
     let empty_secret = WrappedSecret {
@@ -330,7 +343,7 @@ async fn test_platform_context_initialization() {
     let notifications = Arc::new(DesktopNotificationPlatform);
     let storage = Arc::new(MemorySecureStoragePlatform::new());
     let permissions = Arc::new(DesktopPermissionPlatform);
-    let capabilities = PlatformCapabilities::new(true, false, false, true);
+    let capabilities = PlatformCapabilities::new(true, false, false, false, true);
 
     let context = PlatformContext::new(notifications, storage, permissions, capabilities);
 
@@ -345,6 +358,7 @@ async fn test_platform_context_initialization() {
     // Verify capabilities
     assert!(context.capabilities.notifications);
     assert!(!context.capabilities.biometric);
+    assert!(!context.capabilities.strongbox);
 }
 
 // Mock JNI Bridge for testing
@@ -416,10 +430,15 @@ async fn test_jni_backend_uninitialized() {
         tag: vec![0u8; 16],
     };
     let result_decrypt = jni_backend.unwrap_key(&dummy_secret).await;
-    assert_eq!(result_decrypt.unwrap_err(), KeyStoreError::BackendUnavailable);
+    assert_eq!(
+        result_decrypt.unwrap_err(),
+        KeyStoreError::BackendUnavailable
+    );
 
     // Failed state -> wrap/unwrap must fail with BackendUnavailable
-    jni_backend.set_state(KeyStoreState::Failed("TEE error".to_string())).await;
+    jni_backend
+        .set_state(KeyStoreState::Failed("TEE error".to_string()))
+        .await;
     let result_fail = jni_backend.wrap_key(b"test").await;
     assert_eq!(result_fail.unwrap_err(), KeyStoreError::BackendUnavailable);
 }
@@ -462,7 +481,7 @@ async fn test_invalid_dto_response_mapping() {
 
     *bridge.should_return_bad_dto.lock().await = true;
     let result = jni_backend.wrap_key(b"test").await;
-    
+
     // validate() inside tests should verify it fails
     let secret = result.unwrap();
     assert!(secret.validate().is_err());
@@ -473,9 +492,9 @@ async fn test_lifecycle_callback_without_registration() {
     // Calling JNI lifecycle callbacks before registration should not panic.
     // They should gracefully print a warning in the logs and exit.
     use super::adapters::android::lifecycle::{
+        Java_com_hroniki_app_LifecycleBridge_onLocked,
         Java_com_hroniki_app_LifecycleBridge_onPause,
         Java_com_hroniki_app_LifecycleBridge_onResume,
-        Java_com_hroniki_app_LifecycleBridge_onLocked
     };
 
     let dummy_env = std::ptr::null_mut();
@@ -485,6 +504,27 @@ async fn test_lifecycle_callback_without_registration() {
     Java_com_hroniki_app_LifecycleBridge_onPause(dummy_env, dummy_class);
     Java_com_hroniki_app_LifecycleBridge_onResume(dummy_env, dummy_class);
     Java_com_hroniki_app_LifecycleBridge_onLocked(dummy_env, dummy_class);
-    
+
     // Success: did not panic.
+}
+
+#[tokio::test]
+async fn test_java_exception_roundtrip() {
+    use super::adapters::android::backend::jni::RealKeyStoreJniBridge;
+
+    let bridge = RealKeyStoreJniBridge::new(std::ptr::null_mut());
+
+    // Test wrap_key / unwrap_key on desktop return BackendUnavailable without crashing
+    let wrap_res = bridge.encrypt(b"data").await;
+    assert_eq!(wrap_res.unwrap_err(), KeyStoreError::BackendUnavailable);
+
+    let dummy = WrappedSecret {
+        version: 1,
+        algorithm: "AES-GCM-NoPadding".to_string(),
+        nonce: vec![0u8; 12],
+        ciphertext: vec![1, 2, 3],
+        tag: vec![0u8; 16],
+    };
+    let unwrap_res = bridge.decrypt(&dummy).await;
+    assert_eq!(unwrap_res.unwrap_err(), KeyStoreError::BackendUnavailable);
 }

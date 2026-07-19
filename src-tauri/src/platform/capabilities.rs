@@ -7,6 +7,7 @@ pub struct PlatformCapabilities {
     pub notifications: bool,
     pub biometric: bool,
     pub secure_hardware: bool,
+    pub strongbox: bool,
     pub background_tasks: bool,
 }
 
@@ -15,12 +16,14 @@ impl PlatformCapabilities {
         notifications: bool,
         biometric: bool,
         secure_hardware: bool,
+        strongbox: bool,
         background_tasks: bool,
     ) -> Self {
         Self {
             notifications,
             biometric,
             secure_hardware,
+            strongbox,
             background_tasks,
         }
     }

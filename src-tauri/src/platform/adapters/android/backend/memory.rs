@@ -1,7 +1,7 @@
-use async_trait::async_trait;
-use aes_gcm::{Aes256Gcm, KeyInit, aead::Aead};
 use super::{KeyStoreBackend, KeyStoreError};
 use crate::platform::adapters::android::storage::WrappedSecret;
+use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit};
+use async_trait::async_trait;
 
 pub struct MemoryKeyStoreBackend {
     master_key: [u8; 32],
@@ -25,15 +25,15 @@ impl Default for MemoryKeyStoreBackend {
 impl KeyStoreBackend for MemoryKeyStoreBackend {
     async fn wrap_key(&self, plaintext: &[u8]) -> Result<WrappedSecret, KeyStoreError> {
         let mut nonce_bytes = [0u8; 12];
-        getrandom::getrandom(&mut nonce_bytes)
-            .map_err(|_| KeyStoreError::EncryptionFailed)?;
+        getrandom::getrandom(&mut nonce_bytes).map_err(|_| KeyStoreError::EncryptionFailed)?;
 
         let cipher = Aes256Gcm::new_from_slice(&self.master_key)
             .map_err(|_| KeyStoreError::EncryptionFailed)?;
 
         let nonce = aes_gcm::Nonce::from_slice(&nonce_bytes);
-        
-        let encrypted = cipher.encrypt(nonce, plaintext)
+
+        let encrypted = cipher
+            .encrypt(nonce, plaintext)
             .map_err(|_| KeyStoreError::EncryptionFailed)?;
 
         // В aes-gcm результат шифрования содержит ciphertext + 16-байтный tag в конце
@@ -65,7 +65,8 @@ impl KeyStoreBackend for MemoryKeyStoreBackend {
         let mut payload = secret.ciphertext.clone();
         payload.extend_from_slice(&secret.tag);
 
-        let decrypted = cipher.decrypt(nonce, payload.as_slice())
+        let decrypted = cipher
+            .decrypt(nonce, payload.as_slice())
             .map_err(|_| KeyStoreError::DecryptionFailed)?;
 
         Ok(decrypted)
