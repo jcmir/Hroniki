@@ -181,11 +181,11 @@ async fn test_migration_0009_preserves_custom_repeat_days() {
         .execute(&pool).await.unwrap();
 
     // Now run migration 0009_reminders_v2 manually
-    let migration_sql = std::fs::read_to_string("migrations/0009_reminders_v2.sql").unwrap();
+    let migration_sql = include_str!("../../migrations/0009_reminders_v2.sql");
     
     // We execute the migration queries. SQLite requires executing batch scripts as multiple statements or via transaction block
     // sqlx execute will run multiple semicolon-separated statements sequentially.
-    sqlx::query(&migration_sql).execute(&pool).await.unwrap();
+    sqlx::query(migration_sql).execute(&pool).await.unwrap();
 
     // Load migrated reminder and check that recurrence contains "EveryNDays:45"
     let row = sqlx::query("SELECT recurrence FROM reminders WHERE id = 'rem-1'")
