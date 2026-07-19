@@ -7,6 +7,7 @@
   import BottomNav from '$lib/components/BottomNav.svelte';
   import Card from '$lib/components/Card.svelte';
   import EntryDetail from '$lib/components/EntryDetail.svelte';
+  import PinLockScreen from '$lib/components/PinLockScreen.svelte';
   import { mockInvoke } from '$lib/mock/mockRepository';
 
   // State variables from DB
@@ -39,7 +40,6 @@
   let reminderPeriod = $state('Через 14 дней');
   
   // Selected photos paths (absolute paths before saving)
-  // Selected photos paths (absolute paths before saving)
   let selectedPhotoPaths = $state<string[]>([]);
 
   // Search & Filter state
@@ -50,14 +50,96 @@
   let searchEndDate = $state('');
   let showFiltersPanel = $state(false);
 
+  // Security PIN and Backup states
+  let isAppLocked = $state(false);
+  let showSetPinModal = $state(false);
+  let showBackupPasswordModal = $state(false);
+  let showImportPasswordModal = $state(false);
+
+  let tempPinSetup = $state('');
+  let backupPasswordInput = $state('');
+  let importPasswordInput = $state('');
+  let isPinEnabled = $state(false);
+
   // Selected object chronicle view state
   let selectedObjectForChronicle = $state<any>(null);
   let selectedObjectStats = $state<any>(null);
   let selectedObjectEntries = $state<any[]>([]);
 
   onMount(async () => {
+    try {
+      const pinConfigured = await safeInvoke<boolean>('is_pin_configured');
+      if (pinConfigured) {
+        isAppLocked = true;
+      }
+      isPinEnabled = pinConfigured;
+    } catch (e) {
+      console.error('Failed to query PIN lock configuration:', e);
+    }
     await refreshData();
   });
+
+  async function handleVerifyPin(pin: string): Promise<boolean> {
+    try {
+      return await safeInvoke<boolean>('verify_pin', { pin });
+    } catch (e) {
+      console.error(e);
+      return false;
+    }
+  }
+
+  async function handleSetupNewPin() {
+    if (tempPinSetup.length < 4) return;
+    try {
+      await safeInvoke('set_pin', { pin: tempPinSetup });
+      isPinEnabled = true;
+      showSetPinModal = false;
+      tempPinSetup = '';
+    } catch (e) {
+      console.error('Failed to set PIN:', e);
+    }
+  }
+
+  async function handleTogglePin() {
+    if (isPinEnabled) {
+      try {
+        await safeInvoke('disable_pin');
+        isPinEnabled = false;
+      } catch (e) {
+        console.error('Failed to disable PIN:', e);
+      }
+    } else {
+      showSetPinModal = true;
+    }
+  }
+
+  async function handleExportBackup() {
+    if (!backupPasswordInput) return;
+    try {
+      const msg = await safeInvoke<string>('export_archive', { password: backupPasswordInput });
+      alert(msg);
+      showBackupPasswordModal = false;
+      backupPasswordInput = '';
+    } catch (e) {
+      alert(`Ошибка экспорта: ${e}`);
+    }
+  }
+
+  async function handleImportBackup() {
+    if (!importPasswordInput) return;
+    try {
+      await safeInvoke('import_archive', { password: importPasswordInput });
+      alert("Архив успешно восстановлен. Приложение будет перезапущено для обновления данных.");
+      showImportPasswordModal = false;
+      importPasswordInput = '';
+      // Force reload page to reload SQLite pool and refresh everything
+      if (typeof window !== 'undefined') {
+        window.location.reload();
+      }
+    } catch (e) {
+      alert(`Ошибка импорта: ${e}`);
+    }
+  }
 
   // Safe wrapper around Tauri invoke to run gracefully in standard browsers
   async function safeInvoke<T>(cmd: string, args?: any): Promise<T> {
@@ -575,6 +657,31 @@
             </div>
           </div>
         </Card>
+
+        <h3 class="section-title" style="margin-top: 24px;">Безопасность</h3>
+        <Card>
+          <div class="settings-list">
+            <div class="settings-item" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+              <span class="setting-name">Защита PIN-кодом</span>
+              <label class="switch">
+                <input type="checkbox" checked={isPinEnabled} onchange={handleTogglePin} />
+                <span class="slider round"></span>
+              </label>
+            </div>
+          </div>
+        </Card>
+
+        <h3 class="section-title" style="margin-top: 24px;">Резервное копирование</h3>
+        <Card>
+          <div class="settings-list">
+            <button type="button" class="settings-action-btn" onclick={() => showBackupPasswordModal = true}>
+              🛡️ Экспортировать зашифрованный архив
+            </button>
+            <button type="button" class="settings-action-btn" onclick={() => showImportPasswordModal = true}>
+              🔑 Восстановить данные из файла
+            </button>
+          </div>
+        </Card>
       </section>
     {/if}
   </div>
@@ -742,6 +849,92 @@
       onDelete={handleDeleteEntry}
       onSave={handleSaveEditedEntry}
     />
+  {/if}
+  <!-- Modal: Setup PIN -->
+  {#if showSetPinModal}
+    <div class="modal-backdrop" transition:fade={{ duration: 200 }} onclick={() => showSetPinModal = false} onkeydown={() => {}} role="presentation">
+      <div class="bottom-sheet" transition:slide={{ duration: 300 }} onclick={(e) => e.stopPropagation()} onkeydown={() => {}} role="presentation">
+        <div class="bottom-sheet-handle"></div>
+        <header class="sheet-header">
+          <button type="button" class="text-btn" onclick={() => showSetPinModal = false}>Отмена</button>
+          <h2>Установить PIN-код</h2>
+          <button type="button" class="text-btn primary" onclick={handleSetupNewPin}>Готово</button>
+        </header>
+        <div class="sheet-form">
+          <div class="form-group">
+            <label class="form-label" for="pin-input">Введите 4-значный PIN</label>
+            <input
+              id="pin-input"
+              type="password"
+              maxlength="4"
+              pattern="[0-9]*"
+              inputmode="numeric"
+              class="form-input"
+              style="text-align: center; font-size: 1.5rem; letter-spacing: 12px;"
+              placeholder="••••"
+              bind:value={tempPinSetup}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Modal: Password for Backup -->
+  {#if showBackupPasswordModal}
+    <div class="modal-backdrop" transition:fade={{ duration: 200 }} onclick={() => showBackupPasswordModal = false} onkeydown={() => {}} role="presentation">
+      <div class="bottom-sheet" transition:slide={{ duration: 300 }} onclick={(e) => e.stopPropagation()} onkeydown={() => {}} role="presentation">
+        <div class="bottom-sheet-handle"></div>
+        <header class="sheet-header">
+          <button type="button" class="text-btn" onclick={() => showBackupPasswordModal = false}>Отмена</button>
+          <h2>Пароль для архива</h2>
+          <button type="button" class="text-btn primary" onclick={handleExportBackup}>Экспорт</button>
+        </header>
+        <div class="sheet-form">
+          <div class="form-group">
+            <label class="form-label" for="backup-pw-input">Задайте пароль для шифрования архива</label>
+            <input
+              id="backup-pw-input"
+              type="password"
+              class="form-input"
+              placeholder="Пароль бэкапа"
+              bind:value={backupPasswordInput}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Modal: Password for Import -->
+  {#if showImportPasswordModal}
+    <div class="modal-backdrop" transition:fade={{ duration: 200 }} onclick={() => showImportPasswordModal = false} onkeydown={() => {}} role="presentation">
+      <div class="bottom-sheet" transition:slide={{ duration: 300 }} onclick={(e) => e.stopPropagation()} onkeydown={() => {}} role="presentation">
+        <div class="bottom-sheet-handle"></div>
+        <header class="sheet-header">
+          <button type="button" class="text-btn" onclick={() => showImportPasswordModal = false}>Отмена</button>
+          <h2>Пароль импорта</h2>
+          <button type="button" class="text-btn primary" onclick={handleImportBackup}>Импорт</button>
+        </header>
+        <div class="sheet-form">
+          <div class="form-group">
+            <label class="form-label" for="import-pw-input">Введите пароль для расшифровки бэкапа</label>
+            <input
+              id="import-pw-input"
+              type="password"
+              class="form-input"
+              placeholder="Пароль расшифровки"
+              bind:value={importPasswordInput}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <!-- Pin Lock Screen Overlay -->
+  {#if isAppLocked}
+    <PinLockScreen onVerify={handleVerifyPin} onSuccess={() => isAppLocked = false} />
   {/if}
 </main>
 
@@ -1631,5 +1824,24 @@
   }
   .object-avatar-emoji {
     font-size: 3rem;
+  }
+
+  .settings-action-btn {
+    border: none;
+    background: none;
+    color: var(--primary-purple);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+    padding: 12px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--light-gray);
+  }
+  .settings-action-btn:last-child {
+    border-bottom: none;
   }
 </style>

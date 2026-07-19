@@ -31,3 +31,8 @@ tokio = { version = "1", features = ["sync", "rt", "macros"] }
 sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio", "chrono", "uuid", "migrate"] }
 async-trait = "0.1"
 rfd = "0.15"
+aes-gcm = "0.10"
+pbkdf2 = "0.12"
+rand = "0.8"
+sha2 = "0.10"
+zip = "0.6"

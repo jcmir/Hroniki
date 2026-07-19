@@ -77,6 +77,12 @@ pub fn run() {
             commands::reminders::get_reminders,
             commands::reminders::complete_reminder,
             commands::reminders::snooze_reminder,
+            commands::pin::is_pin_configured,
+            commands::pin::set_pin,
+            commands::pin::verify_pin,
+            commands::pin::disable_pin,
+            commands::backup::export_archive,
+            commands::backup::import_archive,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

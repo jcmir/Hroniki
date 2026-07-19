@@ -111,5 +111,35 @@ export function mockInvoke(cmd: string, args: any): any {
   if (cmd === 'snooze_reminder') {
     return null;
   }
+  if (cmd === 'is_pin_configured') {
+    if (typeof window !== 'undefined') {
+      return !!localStorage.getItem('hroniki_mock_pin');
+    }
+    return false;
+  }
+  if (cmd === 'set_pin') {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('hroniki_mock_pin', args.pin);
+    }
+    return null;
+  }
+  if (cmd === 'verify_pin') {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('hroniki_mock_pin') === args.pin;
+    }
+    return false;
+  }
+  if (cmd === 'disable_pin') {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('hroniki_mock_pin');
+    }
+    return null;
+  }
+  if (cmd === 'export_archive') {
+    return "Mock export completed";
+  }
+  if (cmd === 'import_archive') {
+    return null;
+  }
   return null;
 }
