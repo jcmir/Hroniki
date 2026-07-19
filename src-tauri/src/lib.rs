@@ -5,6 +5,7 @@ pub mod domain;
 pub mod storage;
 pub mod identity;
 pub mod security;
+pub mod account;
 
 
 use std::sync::Arc;
