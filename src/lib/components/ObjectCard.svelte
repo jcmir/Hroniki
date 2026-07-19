@@ -1,6 +1,6 @@
 <script lang="ts">
   import { fly } from 'svelte/transition';
-  import { getCategoryIcon } from '../utils/categoryIcons';
+  import CategoryIcon from './CategoryIcon.svelte';
   import type { ChronicleObject } from '../types';
   import { formatAge, pluralRu } from '../utils/dateHelpers';
 
@@ -14,7 +14,6 @@
 
   let { object, categoryName = 'Категория', entryCount = 0, index = 0, onSelect }: Props = $props();
 
-  const icon = $derived(getCategoryIcon(categoryName));
   const age = $derived(formatAge(object.created_at, true));
 </script>
 
@@ -24,7 +23,9 @@
   onclick={() => onSelect(object)}
   in:fly={{ y: 16, duration: 280, delay: index * 55 }}
 >
-  <div class="object-card-icon">{icon}</div>
+  <div class="object-card-icon">
+    <CategoryIcon {categoryName} size={22} />
+  </div>
 
   <div class="object-card-body">
     <span class="object-card-name">{object.name}</span>
@@ -59,8 +60,8 @@
   }
   .object-card:active { transform: scale(0.98); }
   .object-card-icon {
-    font-size: 1.6rem;
     background: var(--light-gray);
+    color: var(--primary-purple);
     width: 48px;
     height: 48px;
     border-radius: 14px;

@@ -1,14 +1,15 @@
 <script lang="ts">
   import { fade, fly } from 'svelte/transition';
   import TimelineCard from './TimelineCard.svelte';
+  import CategoryIcon from './CategoryIcon.svelte';
   import { getCategoryIcon } from '../utils/categoryIcons';
-  import type { ChronicleObject, ObjectStats, Entry, Category } from '../types';
+  import type { ChronicleObject, ObjectStats, TimelineEntry, Category } from '../types';
   import { formatAge, formatDateRu } from '../utils/dateHelpers';
 
   interface Props {
     object: ChronicleObject;
     stats: ObjectStats | null;
-    entries: Entry[];
+    entries: TimelineEntry[];
     categories: Category[];
     onBack: () => void;
     onCardClick: (id: string) => void;
@@ -17,14 +18,14 @@
   let { object, stats, entries, categories, onBack, onCardClick }: Props = $props();
 
   // Group entries by year of occurred_at, sorted ascending
-  function groupByYear(list: Entry[]): [number, Entry[]][] {
-    const map: Record<number, Entry[]> = {};
+  function groupByYear(list: TimelineEntry[]): [number, TimelineEntry[]][] {
+    const map: Record<number, TimelineEntry[]> = {};
     for (const e of list) {
       const year = new Date(e.occurred_at).getFullYear();
       (map[year] ??= []).push(e);
     }
     return Object.entries(map)
-      .map(([y, es]) => [Number(y), es] as [number, Entry[]])
+      .map(([y, es]) => [Number(y), es] as [number, TimelineEntry[]])
       .sort((a, b) => a[0] - b[0]);
   }
 
@@ -32,6 +33,11 @@
   const icon = $derived(getCategoryIcon(categoryName));
   const age = $derived(formatAge(object.created_at));
   const yearGroups = $derived(groupByYear(entries));
+
+  // Find latest entry image to use as cover photo
+  const coverImage = $derived(
+    [...entries].reverse().find(e => e.images && e.images.length > 0)?.images?.[0] ?? null
+  );
 
   // First ever entry by occurred_at
   const firstEntry = $derived(
@@ -49,11 +55,20 @@
 
   <!-- Hero -->
   <div class="object-hero" in:fly={{ y: 12, duration: 300, delay: 60 }}>
-    <div class="object-avatar-wrapper">
-      <span class="object-avatar-emoji">{icon}</span>
+    <div class="object-cover-wrapper">
+      {#if coverImage}
+        <img src={coverImage} alt={object.name} class="object-cover-image" />
+      {:else}
+        <div class="object-cover-placeholder">
+          <CategoryIcon {categoryName} size={42} />
+        </div>
+      {/if}
     </div>
     <h2 class="object-title">{object.name}</h2>
-    <span class="object-category-badge">{icon} {categoryName}</span>
+    <span class="object-category-badge">
+      <CategoryIcon {categoryName} size={14} />
+      {categoryName}
+    </span>
     {#if age}
       <span class="object-age">В архиве: {age}</span>
     {/if}
@@ -170,19 +185,38 @@
     gap: 6px;
   }
 
-  .object-avatar-wrapper {
-    width: 80px;
-    height: 80px;
-    border-radius: 22px;
+  .object-cover-wrapper {
+    width: 100%;
+    max-width: 480px;
+    height: 180px;
+    border-radius: var(--radius-xl);
+    overflow: hidden;
+    position: relative;
+    box-shadow: var(--card-shadow);
+    margin-bottom: 20px;
     background: var(--light-gray);
+  }
+
+  .object-cover-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .object-cover-wrapper:hover .object-cover-image {
+    transform: scale(1.04);
+  }
+
+  .object-cover-placeholder {
+    width: 100%;
+    height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 6px 20px rgba(96, 37, 255, 0.12);
-    margin-bottom: 10px;
+    background: linear-gradient(135deg, rgba(96, 37, 255, 0.08), rgba(255, 85, 85, 0.08));
+    color: var(--primary-purple);
   }
-
-  .object-avatar-emoji { font-size: 2.6rem; line-height: 1; }
 
   .object-title {
     font-size: 1.45rem;
@@ -192,7 +226,10 @@
   }
 
   .object-category-badge {
-    padding: 4px 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
     border-radius: 12px;
     background: var(--accent-green-bg);
     color: var(--accent-green);

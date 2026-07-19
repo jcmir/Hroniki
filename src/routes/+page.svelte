@@ -14,19 +14,19 @@
   import { mockInvoke } from '$lib/mock/mockRepository';
 
   // Explicit Types
-  import type { Category, ChronicleObject, Entry, ObjectStats, Reminder } from '$lib/types';
+  import type { Category, ChronicleObject, Entry, TimelineEntry, ObjectStats, Reminder } from '$lib/types';
 
   // State variables from DB
   let categories = $state<Category[]>([]);
   let objects = $state<ChronicleObject[]>([]);
-  let entries = $state<Entry[]>([]);
+  let entries = $state<TimelineEntry[]>([]);
   let reminders = $state<Reminder[]>([]);
 
   // Navigation state
   let activeTab = $state<'feed' | 'objects' | 'reminders' | 'settings'>('feed');
   let showAddModal = $state(false);
   let showDetail = $state(false);
-  let selectedEntry = $state<Entry | null>(null);
+  let selectedEntry = $state<TimelineEntry | null>(null);
 
   // Selected date state
   let selectedDateIndex = $state(0);
@@ -74,7 +74,7 @@
   // Selected object chronicle view state and scroll preservation
   let selectedObjectForChronicle = $state<ChronicleObject | null>(null);
   let selectedObjectStats = $state<ObjectStats | null>(null);
-  let selectedObjectEntries = $state<Entry[]>([]);
+  let selectedObjectEntries = $state<TimelineEntry[]>([]);
   let objectsScrollY = 0;
 
   onMount(async () => {

@@ -1,5 +1,6 @@
 <script lang="ts">
   import Card from './Card.svelte';
+  import CategoryIcon from './CategoryIcon.svelte';
   import { fly } from 'svelte/transition';
 
   interface Props {
@@ -61,7 +62,7 @@
       <!-- Header with Category -->
       <div class="card-header">
         <span class="category-badge">
-          <span class="category-icon">{categoryIcon}</span>
+          <span class="category-icon" style="display: flex; align-items: center;"><CategoryIcon {categoryName} size={14} /></span>
           <span class="category-name">{categoryName}</span>
         </span>
       </div>
