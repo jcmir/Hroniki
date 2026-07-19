@@ -1,3 +1,4 @@
+pub mod backend;
 pub mod lifecycle;
 pub mod notifications;
 pub mod storage;

@@ -1,12 +1,17 @@
 use crate::platform::lifecycle::{LifecycleEvent, LifecycleTranslator};
 use serde::{Deserialize, Serialize};
 
+/// Platform OS-specific lifecycle abstraction.
+/// Note: PlatformLifecycleEvent::Locked != PlatformLifecycleEvent::Background.
+/// Background triggers when app UI is no longer active (e.g. Home Button).
+/// Locked triggers when OS session boundaries change (e.g. Screen Off / Device lock).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PlatformLifecycleEvent {
     Background,
     Foreground,
     Terminating,
     MemoryPressure,
+    Locked,
 }
 
 pub struct AndroidLifecyclePlatform {
@@ -26,6 +31,7 @@ impl AndroidLifecyclePlatform {
             PlatformLifecycleEvent::MemoryPressure => {
                 LifecycleEvent::Unknown("MemoryPressure".to_string())
             }
+            PlatformLifecycleEvent::Locked => LifecycleEvent::AppSuspended,
         };
 
         self.translator.translate(lifecycle_event);

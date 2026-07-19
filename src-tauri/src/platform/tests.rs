@@ -1,3 +1,5 @@
+use super::adapters::android::backend::{KeyStoreBackend, KeyStoreError, MemoryKeyStoreBackend};
+use super::adapters::android::storage::WrappedSecret;
 use super::adapters::{
     android::lifecycle::PlatformLifecycleEvent, AndroidLifecyclePlatform,
     AndroidSecureStoragePlatform, DesktopNotificationPlatform, DesktopPermissionPlatform,
@@ -57,8 +59,51 @@ async fn test_memory_storage_contract() {
 
 #[tokio::test]
 async fn test_android_storage_contract() {
-    let storage = Arc::new(AndroidSecureStoragePlatform::new());
+    let storage = Arc::new(AndroidSecureStoragePlatform::default());
     run_storage_contract_test(storage).await;
+}
+
+#[tokio::test]
+async fn test_nonce_uniqueness_and_ciphertext_safety() {
+    let backend = MemoryKeyStoreBackend::new();
+    let plaintext = b"sensitive_password_to_encrypt";
+
+    let mut nonces = std::collections::HashSet::new();
+    let mut ciphertexts = std::collections::HashSet::new();
+
+    // Perform 100 encryptions of the same plaintext and ensure unique nonces and unique ciphertexts
+    for _ in 0..100 {
+        let wrapped = backend.wrap_key(plaintext).await.unwrap();
+
+        assert_eq!(wrapped.nonce.len(), 12);
+        assert!(
+            nonces.insert(wrapped.nonce.clone()),
+            "Duplicate nonce generated!"
+        );
+        assert!(
+            ciphertexts.insert(wrapped.ciphertext.clone()),
+            "Duplicate ciphertext generated for same plaintext!"
+        );
+
+        // Decrypt and confirm roundtrip
+        let decrypted = backend.unwrap_key(&wrapped).await.unwrap();
+        assert_eq!(decrypted, plaintext);
+    }
+}
+
+#[tokio::test]
+async fn test_unknown_version_rejection() {
+    let backend = MemoryKeyStoreBackend::new();
+    let bad_secret = WrappedSecret {
+        version: 999,
+        algorithm: "AES-GCM-NoPadding".to_string(),
+        nonce: vec![0u8; 12],
+        ciphertext: vec![1, 2, 3],
+    };
+
+    let result = backend.unwrap_key(&bad_secret).await;
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), KeyStoreError::InvalidVersion(999));
 }
 
 #[tokio::test]
@@ -178,6 +223,29 @@ async fn test_android_lifecycle_event_translation() {
     } else {
         panic!(
             "Expected ApplicationSuspended for Android Background event, received {:?}",
+            event
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_android_lifecycle_locked_translation() {
+    let event_bus = Arc::new(EventBus::new());
+    let mut rx = event_bus.subscribe();
+
+    let translator = Arc::new(LifecycleTranslator::new(event_bus.clone()));
+    let android_lifecycle = AndroidLifecyclePlatform::new(translator);
+
+    // Trigger Android Locked event (Screen Off)
+    android_lifecycle.handle_os_event(PlatformLifecycleEvent::Locked);
+
+    // Verify it maps to DomainEvent::ApplicationSuspended
+    let event = rx.recv().await.unwrap();
+    if let DomainEvent::ApplicationSuspended = event {
+        // Success
+    } else {
+        panic!(
+            "Expected ApplicationSuspended for Android Locked event, received {:?}",
             event
         );
     }
