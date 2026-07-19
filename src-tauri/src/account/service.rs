@@ -69,7 +69,8 @@ mod tests {
     async fn local_account_flow() {
         let pool = create_test_pool().await;
         let repository = Arc::new(SqliteIdentityRepository::new(pool.clone()));
-        let provider = Arc::new(LocalAccountProvider::new(repository));
+        let event_bus = Arc::new(crate::events::EventBus::new());
+        let provider = Arc::new(LocalAccountProvider::new(repository, event_bus));
         let service = AccountService::new(provider);
 
         let email = format!("user_{}@test.com", Uuid::new_v4());

@@ -8,6 +8,8 @@ pub mod security;
 pub mod account;
 pub mod features;
 pub mod events;
+pub mod audit;
+
 
 
 use std::sync::Arc;
@@ -57,6 +59,12 @@ pub fn run() {
                 crate::application::bootstrap::start_reminder_scheduler(pool.clone(), app_handle.clone());
 
                 let event_bus = Arc::new(crate::events::EventBus::new());
+
+                // Initialize and start Audit Log Subscriber
+                let audit_repo = Arc::new(crate::storage::SqliteIdentityRepository::new(pool.clone()));
+                let audit_service = Arc::new(crate::audit::service::AuditService::new(audit_repo));
+                let audit_subscriber = crate::audit::subscriber::AuditSubscriber::new(event_bus.clone(), audit_service);
+                audit_subscriber.start();
 
                 app.manage(AppState {
                     service: Arc::new(Mutex::new(service)),

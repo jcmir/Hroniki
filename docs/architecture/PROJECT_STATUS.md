@@ -14,6 +14,6 @@
 | **Feature Gate**| Licensing Gate | ✅ Production | v1.0.0 | FeatureService, SubscriptionPlan сопоставление |
 | **Backup** | Archive Format v2 | ✅ Production | v1.0.0 | manifest.json с контролем схем БД при импорте |
 | **Event Bus** | Pub/Sub Bus | ✅ Production | v1.0.0 | Tokio broadcast асинхронные Domain Events |
-| **Audit Log** | Actions logger | 🚧 Planned | v1.2.0 | Подписчик на EventBus для аудита изменений |
+| **Audit Log** | Actions logger | 🚧 In Progress | v1.0.0 | Подписчик на EventBus для аудита изменений |
 | **Cloud Sync** | Sync Engine | 🚧 Planned | v1.3.0 | CloudAccountProvider для репликации в облако |
 | **AI Engine** | RAG Search | 🚧 Planned | v1.4.0 | Векторизация записей, семантический поиск по ленте |

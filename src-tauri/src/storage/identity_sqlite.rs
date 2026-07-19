@@ -270,6 +270,78 @@ impl crate::features::repository::SubscriptionRepository for SqliteIdentityRepos
     }
 }
 
+#[async_trait]
+impl crate::audit::repository::AuditRepository for SqliteIdentityRepository {
+    async fn record_log(&self, entry: crate::audit::models::AuditLogEntry) -> Result<(), IdentityError> {
+        sqlx::query(
+            r#"
+            INSERT INTO audit_logs (id, user_id, event_type, details, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(entry.id)
+        .bind(entry.user_id)
+        .bind(entry.event_type)
+        .bind(entry.details)
+        .bind(entry.created_at.to_rfc3339())
+        .execute(&self.pool)
+        .await
+        .map_err(|e| IdentityError::Storage(e.to_string()))?;
+
+        Ok(())
+    }
+
+    async fn fetch_logs(&self, user_id: Option<&str>) -> Result<Vec<crate::audit::models::AuditLogEntry>, IdentityError> {
+        let rows = if let Some(uid) = user_id {
+            sqlx::query(
+                r#"
+                SELECT id, user_id, event_type, details, created_at
+                FROM audit_logs
+                WHERE user_id = ?
+                ORDER BY created_at DESC
+                "#,
+            )
+            .bind(uid)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| IdentityError::Storage(e.to_string()))?
+        } else {
+            sqlx::query(
+                r#"
+                SELECT id, user_id, event_type, details, created_at
+                FROM audit_logs
+                ORDER BY created_at DESC
+                "#,
+            )
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| IdentityError::Storage(e.to_string()))?
+        };
+
+        let mut entries = Vec::new();
+        for r in rows {
+            let id: String = r.try_get("id").map_err(|e| IdentityError::Storage(e.to_string()))?;
+            let user_id: Option<String> = r.try_get("user_id").map_err(|e| IdentityError::Storage(e.to_string()))?;
+            let event_type: String = r.try_get("event_type").map_err(|e| IdentityError::Storage(e.to_string()))?;
+            let details: Option<String> = r.try_get("details").map_err(|e| IdentityError::Storage(e.to_string()))?;
+            let created_at_str: String = r.try_get("created_at").map_err(|e| IdentityError::Storage(e.to_string()))?;
+            let created_at = created_at_str.parse()
+                .map_err(|e| IdentityError::Storage(format!("Invalid date format: {}", e)))?;
+
+            entries.push(crate::audit::models::AuditLogEntry {
+                id,
+                user_id,
+                event_type,
+                details,
+                created_at,
+            });
+        }
+
+        Ok(entries)
+    }
+}
+
+
 
 #[cfg(test)]
 mod tests {

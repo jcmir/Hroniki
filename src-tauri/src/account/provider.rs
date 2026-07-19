@@ -38,11 +38,12 @@ pub trait AccountProvider: Send + Sync {
 
 pub struct LocalAccountProvider {
     repository: Arc<dyn IdentityRepository>,
+    event_bus: Arc<crate::events::EventBus>,
 }
 
 impl LocalAccountProvider {
-    pub fn new(repository: Arc<dyn IdentityRepository>) -> Self {
-        Self { repository }
+    pub fn new(repository: Arc<dyn IdentityRepository>, event_bus: Arc<crate::events::EventBus>) -> Self {
+        Self { repository, event_bus }
     }
 }
 
@@ -73,6 +74,12 @@ impl AccountProvider for LocalAccountProvider {
 
         self.repository.create_user(user.clone(), password_hash).await?;
 
+        // Publish registration event
+        self.event_bus.publish(crate::events::DomainEvent::UserRegistered {
+            user_id: user.id.clone(),
+            email: user.email.clone(),
+        });
+
         Ok(user)
     }
 
@@ -90,8 +97,19 @@ impl AccountProvider for LocalAccountProvider {
             .map_err(|e| IdentityError::Crypto(e))?;
 
         if !is_valid {
+            // Publish authentication failure event
+            self.event_bus.publish(crate::events::DomainEvent::UserAuthenticated {
+                user_id: user.id.clone(),
+                success: false,
+            });
             return Err(IdentityError::InvalidPassword);
         }
+
+        // Publish authentication success event
+        self.event_bus.publish(crate::events::DomainEvent::UserAuthenticated {
+            user_id: user.id.clone(),
+            success: true,
+        });
 
         Ok(user)
     }
@@ -110,6 +128,13 @@ impl AccountProvider for LocalAccountProvider {
 
         self.repository.create_session(session.clone()).await?;
 
+        // Publish session opened event
+        self.event_bus.publish(crate::events::DomainEvent::SessionOpened {
+            session_id: session.id.clone(),
+            user_id: session.user_id.clone(),
+            device_name: session.device_name.clone(),
+        });
+
         Ok(session)
     }
 
@@ -118,6 +143,13 @@ impl AccountProvider for LocalAccountProvider {
         session_id: &str,
     ) -> Result<(), IdentityError> {
         self.repository.delete_session(session_id).await?;
+
+        // Publish session closed event
+        self.event_bus.publish(crate::events::DomainEvent::SessionClosed {
+            session_id: session_id.to_string(),
+        });
+
         Ok(())
     }
 }
+
