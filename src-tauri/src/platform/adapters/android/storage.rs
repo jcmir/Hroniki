@@ -10,6 +10,7 @@ pub struct WrappedSecret {
     pub algorithm: String,
     pub nonce: Vec<u8>,
     pub ciphertext: Vec<u8>,
+    pub tag: Vec<u8>,
 }
 
 pub struct AndroidSecureStoragePlatform {

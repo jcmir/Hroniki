@@ -55,4 +55,5 @@ pub enum DomainEvent {
     ApplicationSuspended,
     ApplicationResumed,
     ApplicationClosed,
+    ApplicationLocked,
 }

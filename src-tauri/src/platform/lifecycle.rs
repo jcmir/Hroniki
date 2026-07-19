@@ -9,6 +9,7 @@ pub enum LifecycleEvent {
     AppSuspended,
     AppResumed,
     AppClosed,
+    AppLocked,
     Unknown(String),
 }
 
@@ -28,6 +29,7 @@ impl LifecycleTranslator {
             LifecycleEvent::AppSuspended => Some(DomainEvent::ApplicationSuspended),
             LifecycleEvent::AppResumed => Some(DomainEvent::ApplicationResumed),
             LifecycleEvent::AppClosed => Some(DomainEvent::ApplicationClosed),
+            LifecycleEvent::AppLocked => Some(DomainEvent::ApplicationLocked),
             LifecycleEvent::Unknown(name) => {
                 tracing::warn!(event_name = ?name, "Received unknown OS lifecycle event callback");
                 None

@@ -99,11 +99,54 @@ async fn test_unknown_version_rejection() {
         algorithm: "AES-GCM-NoPadding".to_string(),
         nonce: vec![0u8; 12],
         ciphertext: vec![1, 2, 3],
+        tag: vec![0u8; 16],
     };
 
     let result = backend.unwrap_key(&bad_secret).await;
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), KeyStoreError::InvalidVersion(999));
+}
+
+#[tokio::test]
+async fn test_ciphertext_tampering_rejected() {
+    let backend = MemoryKeyStoreBackend::new();
+    let plaintext = b"secure_database_key";
+    let mut wrapped = backend.wrap_key(plaintext).await.unwrap();
+
+    // Corrupt ciphertext
+    wrapped.ciphertext[0] ^= 1;
+
+    let result = backend.unwrap_key(&wrapped).await;
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), KeyStoreError::DecryptionFailed);
+}
+
+#[tokio::test]
+async fn test_tag_tampering_rejected() {
+    let backend = MemoryKeyStoreBackend::new();
+    let plaintext = b"secure_database_key";
+    let mut wrapped = backend.wrap_key(plaintext).await.unwrap();
+
+    // Corrupt auth tag
+    wrapped.tag[0] ^= 1;
+
+    let result = backend.unwrap_key(&wrapped).await;
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), KeyStoreError::DecryptionFailed);
+}
+
+#[tokio::test]
+async fn test_nonce_tampering_rejected() {
+    let backend = MemoryKeyStoreBackend::new();
+    let plaintext = b"secure_database_key";
+    let mut wrapped = backend.wrap_key(plaintext).await.unwrap();
+
+    // Corrupt nonce
+    wrapped.nonce[0] ^= 1;
+
+    let result = backend.unwrap_key(&wrapped).await;
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), KeyStoreError::DecryptionFailed);
 }
 
 #[tokio::test]
@@ -239,13 +282,13 @@ async fn test_android_lifecycle_locked_translation() {
     // Trigger Android Locked event (Screen Off)
     android_lifecycle.handle_os_event(PlatformLifecycleEvent::Locked);
 
-    // Verify it maps to DomainEvent::ApplicationSuspended
+    // Verify it maps to DomainEvent::ApplicationLocked
     let event = rx.recv().await.unwrap();
-    if let DomainEvent::ApplicationSuspended = event {
+    if let DomainEvent::ApplicationLocked = event {
         // Success
     } else {
         panic!(
-            "Expected ApplicationSuspended for Android Locked event, received {:?}",
+            "Expected ApplicationLocked for Android Locked event, received {:?}",
             event
         );
     }

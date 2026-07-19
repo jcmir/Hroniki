@@ -31,7 +31,7 @@ impl AndroidLifecyclePlatform {
             PlatformLifecycleEvent::MemoryPressure => {
                 LifecycleEvent::Unknown("MemoryPressure".to_string())
             }
-            PlatformLifecycleEvent::Locked => LifecycleEvent::AppSuspended,
+            PlatformLifecycleEvent::Locked => LifecycleEvent::AppLocked,
         };
 
         self.translator.translate(lifecycle_event);
