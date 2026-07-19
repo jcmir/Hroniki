@@ -3,6 +3,7 @@ pub mod app_state;
 pub mod application;
 pub mod audit;
 pub mod commands;
+pub mod diagnostics;
 pub mod domain;
 pub mod events;
 pub mod features;
@@ -13,6 +14,9 @@ pub mod reminder;
 pub mod search;
 pub mod security;
 pub mod storage;
+
+/// Application version — single source of truth for crash reports and settings UI.
+pub const APP_VERSION: &str = "0.2.1-beta";
 
 use crate::{
     app_state::AppState,
@@ -45,6 +49,9 @@ pub fn run() {
                 .path()
                 .app_data_dir()
                 .expect("failed to get app data dir");
+
+            // Install panic hook first — captures crashes before anything else
+            crate::diagnostics::install_panic_hook(&app_data_dir);
 
             let database_dir = app_data_dir.join("database");
             let media_originals_dir = app_data_dir.join("media").join("originals");
@@ -190,6 +197,9 @@ pub fn run() {
             commands::demo_experience::seed_demo_dataset,
             commands::reminder::get_memory_center,
             commands::objects::get_object_details,
+            commands::diagnostics::get_crash_logs,
+            commands::diagnostics::read_crash_log,
+            commands::diagnostics::clear_crash_logs,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

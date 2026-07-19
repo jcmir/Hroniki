@@ -60,7 +60,10 @@ impl PermissionPlatform for AndroidPermissionPlatform {
                     Ok(PermissionStatus::Granted)
                 }
             }
-            PermissionKind::Biometrics | PermissionKind::Camera => Ok(PermissionStatus::Denied),
+            PermissionKind::Biometrics
+            | PermissionKind::Camera
+            | PermissionKind::MediaImages
+            | PermissionKind::MediaLegacy => Ok(PermissionStatus::Denied),
         }
     }
 

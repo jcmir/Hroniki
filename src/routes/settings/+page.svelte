@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { invoke } from '@tauri-apps/api/core';
+  import { onMount } from 'svelte';
   import { settingsStore } from '$lib/stores/settings';
   import GlassCard from '$lib/design/GlassCard.svelte';
   import '../../app.css';
@@ -8,6 +10,39 @@
   let statusMsg = '';
   let errorMsg = '';
   let isWorking = false;
+
+  interface CrashLog { filename: string; size_bytes: number; created_at: string; }
+  let crashLogs: CrashLog[] = [];
+  let selectedLog: string | null = null;
+  let selectedLogContent = '';
+  let clearingLogs = false;
+
+  onMount(async () => {
+    try {
+      crashLogs = await invoke<CrashLog[]>('get_crash_logs');
+    } catch { crashLogs = []; }
+  });
+
+  async function handleViewLog(filename: string) {
+    try {
+      selectedLog = filename;
+      selectedLogContent = await invoke<string>('read_crash_log', { filename });
+    } catch (e: any) {
+      selectedLogContent = `Ошибка чтения: ${e}`;
+    }
+  }
+
+  async function handleClearLogs() {
+    clearingLogs = true;
+    try {
+      await invoke('clear_crash_logs');
+      crashLogs = [];
+      selectedLog = null;
+      selectedLogContent = '';
+    } finally {
+      clearingLogs = false;
+    }
+  }
 
   function handleSaveProfile() {
     settingsStore.updateProfileName(profileName);
@@ -135,8 +170,46 @@
 
       <div class="app-version-card">
         <span>Версия приложения:</span>
-        <strong class="ver-badge">Beta 0.2.0</strong>
+        <strong class="ver-badge">Beta 0.2.1</strong>
       </div>
+
+      <!-- Diagnostics Glass Card -->
+      {#if crashLogs.length > 0}
+        <GlassCard hoverEffect={false}>
+          <div class="settings-section">
+            <h3>🛡 Диагностика</h3>
+            <p class="desc-text">
+              Найдено {crashLogs.length} {crashLogs.length === 1 ? 'аварийный отчёт' : 'аварийных отчёта'}.
+              Данные хранятся только на устройстве.
+            </p>
+
+            <div class="crash-list">
+              {#each crashLogs as log (log.filename)}
+                <button
+                  class="crash-row"
+                  class:selected={selectedLog === log.filename}
+                  on:click={() => handleViewLog(log.filename)}
+                >
+                  <span class="crash-name">{log.filename}</span>
+                  <span class="crash-size">{(log.size_bytes / 1024).toFixed(1)} KB</span>
+                </button>
+              {/each}
+            </div>
+
+            {#if selectedLogContent}
+              <pre class="crash-content">{selectedLogContent}</pre>
+            {/if}
+
+            <button
+              class="clear-logs-btn"
+              disabled={clearingLogs}
+              on:click={handleClearLogs}
+            >
+              {clearingLogs ? 'Очищаем...' : '🗑 Удалить все отчёты'}
+            </button>
+          </div>
+        </GlassCard>
+      {/if}
     </div>
   </main>
 </div>
@@ -353,4 +426,61 @@
   .ver-badge {
     color: var(--accent-primary);
   }
+
+  .crash-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    margin: 0.75rem 0;
+  }
+
+  .crash-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.6rem 0.75rem;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s ease;
+    width: 100%;
+  }
+
+  .crash-row.selected {
+    border-color: var(--accent-primary);
+    background-color: rgba(124, 58, 237, 0.04);
+  }
+
+  .crash-name { font-size: 0.8rem; color: var(--text-main); font-family: monospace; }
+  .crash-size { font-size: 0.75rem; color: var(--text-muted); }
+
+  .crash-content {
+    font-size: 0.72rem;
+    font-family: monospace;
+    background-color: rgba(23, 23, 23, 0.04);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 0.75rem;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 240px;
+    overflow-y: auto;
+    margin: 0.5rem 0 1rem;
+    color: var(--text-muted);
+  }
+
+  .clear-logs-btn {
+    background: none;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+  }
+
+  .clear-logs-btn:hover { border-color: var(--accent-pink); color: var(--accent-pink); }
 </style>

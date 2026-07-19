@@ -1,6 +1,7 @@
 pub mod backup;
 pub mod categories;
 pub mod demo_experience;
+pub mod diagnostics;
 pub mod entries;
 pub mod media;
 pub mod objects;
