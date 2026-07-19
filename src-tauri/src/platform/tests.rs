@@ -989,5 +989,115 @@ async fn test_media_missing_file_handling() {
     assert_eq!(photo.source, MediaSource::Gallery);
     let path = std::path::Path::new(&photo.path);
     assert!(!path.exists());
-    // Verification: Application handles missing file path gracefully without panic
+}
+
+#[tokio::test]
+async fn test_thumbnail_dimensions() {
+    use crate::media::MediaService;
+
+    let temp_dir =
+        std::env::temp_dir().join(format!("hroniki_thumb_test_{}", uuid::Uuid::new_v4()));
+    let media_svc = MediaService::new(temp_dir.clone());
+
+    // Create a 1000x800 dummy image buffer
+    let mut imgbuf = image::ImageBuffer::new(1000, 800);
+    for (_x, _y, pixel) in imgbuf.enumerate_pixels_mut() {
+        *pixel = image::Rgb([255u8, 158u8, 11u8]);
+    }
+    let orig_path = temp_dir.join("originals").join("test_large.png");
+    imgbuf.save(&orig_path).unwrap();
+
+    let thumb_path = media_svc.generate_thumbnail("test_large.png", 512).unwrap();
+    assert!(thumb_path.exists());
+
+    let thumb_img = image::open(&thumb_path).unwrap();
+    let (width, height) = (thumb_img.width(), thumb_img.height());
+    assert!(width <= 512, "Thumbnail width {} exceeds 512px", width);
+    assert!(height <= 512, "Thumbnail height {} exceeds 512px", height);
+}
+
+#[tokio::test]
+async fn test_lockout_survives_restart() {
+    use crate::security::throttle::AuthThrottleState;
+
+    let now = chrono::Utc::now();
+    let mut throttle = AuthThrottleState::new();
+
+    // 5 failure attempts -> 30s lockout
+    for _ in 0..5 {
+        throttle.register_failure(now, 5, 30);
+    }
+
+    let (locked, remaining) = throttle.is_locked_out(now);
+    assert!(locked);
+    assert!(remaining > 0);
+
+    // Simulate serialization & restart
+    let json = serde_json::to_string(&throttle).unwrap();
+    let restored: AuthThrottleState = serde_json::from_str(&json).unwrap();
+
+    let (restored_locked, restored_remaining) = restored.is_locked_out(now);
+    assert!(restored_locked);
+    assert_eq!(remaining, restored_remaining);
+}
+
+#[tokio::test]
+async fn test_full_mobile_lifecycle() {
+    use crate::domain::{Category, ChronicleObject, Entry, MediaSource, Photo};
+    use crate::media::MediaService;
+    use crate::storage::{
+        connection::create_pool, migrations::run_migrations, ChronologyRepository,
+        SqliteChronologyRepository,
+    };
+
+    let temp_dir =
+        std::env::temp_dir().join(format!("hroniki_lifecycle_test_{}", uuid::Uuid::new_v4()));
+    let db_path = temp_dir.join("hroniki.sqlite");
+    let db_url = format!("sqlite://{}", db_path.to_string_lossy().replace('\\', "/"));
+
+    // 1. First Run: Init DB & Storage
+    let pool1 = create_pool(&db_url).await.unwrap();
+    run_migrations(&pool1).await.unwrap();
+    let mut repo1 = SqliteChronologyRepository::new(pool1.clone());
+    let media_svc1 = MediaService::new(temp_dir.clone());
+
+    let cat = Category::new("Воспоминания".to_string()).unwrap();
+    repo1.save_category(cat.clone()).await.unwrap();
+    let obj = ChronicleObject::new(cat.id, "Отпуск 2026".to_string(), None).unwrap();
+    repo1.save_object(obj.clone()).await.unwrap();
+
+    let entry = Entry::new(
+        obj.id,
+        chrono::Utc::now(),
+        "Море и Солнце".to_string(),
+        Some("Первый день на пляже".to_string()),
+    )
+    .unwrap();
+
+    // Save media file original & thumbnail
+    let _ = media_svc1
+        .save_original("beach.png", b"dummy_png_bytes")
+        .unwrap();
+    let _ = media_svc1.generate_thumbnail("beach.png", 512).unwrap();
+    let photo = media_svc1.register_photo(entry.id, "beach.png", MediaSource::Gallery);
+
+    repo1
+        .save_entry_with_photos(entry.clone(), vec![photo])
+        .await
+        .unwrap();
+    pool1.close().await;
+
+    // 2. Simulated App Lock & Restart: Reopen DB
+    let pool2 = create_pool(&db_url).await.unwrap();
+    let repo2 = SqliteChronologyRepository::new(pool2.clone());
+
+    let entries = repo2.entries().await.unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].title, "Море и Солнце");
+
+    let photos = repo2.entry_photos(entries[0].id).await.unwrap();
+    assert_eq!(photos.len(), 1);
+    assert_eq!(photos[0].source, MediaSource::Gallery);
+
+    pool2.close().await;
 }

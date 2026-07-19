@@ -30,6 +30,7 @@
         <h1>ХРОНИКИ</h1>
         <span class="sub-text">Личный Дневник Воспоминаний</span>
       </div>
+      <span class="version-chip">Alpha 0.1.0</span>
     </div>
 
     <div class="bar-actions">
@@ -286,4 +287,16 @@
     font-weight: 300;
     line-height: 1;
   }
+
+  .version-chip {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--accent-amber);
+    background-color: var(--accent-amber-glow);
+    border: 1px solid var(--border-accent);
+    padding: 0.15rem 0.5rem;
+    border-radius: var(--radius-pill);
+    margin-left: 0.5rem;
+  }
 </style>
+

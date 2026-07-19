@@ -7,6 +7,7 @@ pub mod domain;
 pub mod events;
 pub mod features;
 pub mod identity;
+pub mod media;
 pub mod platform;
 pub mod reminder;
 pub mod search;
