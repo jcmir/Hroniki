@@ -36,8 +36,7 @@ pub async fn get_username(state: State<'_, AppState>) -> Result<String, String> 
     }
 }
 
-#[tauri::command]
-pub async fn complete_onboarding_impl(username: &str, pool: &sqlx::SqlitePool) -> Result<(), String> {
+pub(crate) async fn complete_onboarding_impl(username: &str, pool: &sqlx::SqlitePool) -> Result<(), String> {
     if username.trim().is_empty() {
         return Err("Username cannot be empty".to_string());
     }
@@ -66,7 +65,7 @@ pub async fn complete_onboarding(username: String, state: State<'_, AppState>) -
     complete_onboarding_impl(&username, pool).await
 }
 
-pub async fn seed_demo_data_impl(pool: &sqlx::SqlitePool) -> Result<(), String> {
+pub(crate) async fn seed_demo_data_impl(pool: &sqlx::SqlitePool) -> Result<(), String> {
     // Check if onboarding is already completed to prevent accidental data loss
     let row: Option<(String,)> = sqlx::query_as("SELECT value FROM app_metadata WHERE key = 'onboarding_completed'")
         .fetch_optional(pool)
