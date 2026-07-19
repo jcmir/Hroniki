@@ -52,3 +52,50 @@ pub async fn get_object_stats(
 
     repo.get_object_stats(obj_id).await
 }
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct ObjectDetailsDto {
+    pub object: ChronicleObject,
+    pub entries_count: usize,
+    pub photos_count: usize,
+    pub entries: Vec<crate::domain::Entry>,
+}
+
+#[tauri::command]
+pub async fn get_object_details(
+    object_id: String,
+    state: State<'_, AppState>,
+) -> Result<ObjectDetailsDto, String> {
+    let service = state.service.lock().await;
+    let repo = service.repository();
+
+    let object_uuid = uuid::Uuid::parse_str(&object_id).map_err(|e| e.to_string())?;
+    let obj_id = crate::domain::ChronicleObjectId::from(object_uuid);
+
+    let objects = repo.objects().await.map_err(|e| e.to_string())?;
+    let obj = objects
+        .into_iter()
+        .find(|o| o.id == obj_id)
+        .ok_or_else(|| "Object not found".to_string())?;
+
+    let all_entries = repo.entries().await.map_err(|e| e.to_string())?;
+    let object_entries: Vec<crate::domain::Entry> = all_entries
+        .into_iter()
+        .filter(|e| e.object_id == obj_id)
+        .collect();
+
+    let mut total_photos = 0;
+    for entry in &object_entries {
+        let photos = repo.entry_photos(entry.id).await.unwrap_or_default();
+        total_photos += photos.len();
+    }
+
+    let entries_count = object_entries.len();
+
+    Ok(ObjectDetailsDto {
+        object: obj,
+        entries_count,
+        photos_count: total_photos,
+        entries: object_entries,
+    })
+}

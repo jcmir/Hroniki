@@ -10,8 +10,10 @@
   import PINLockModal from '$lib/components/PINLockModal.svelte';
   import FilterBar from '$lib/components/FilterBar.svelte';
   import MemoryRepeatBanner from '$lib/components/MemoryRepeatBanner.svelte';
+  import SettingsModal from '$lib/components/SettingsModal.svelte';
 
   let showCreateModal = false;
+  let showSettingsModal = false;
 
   onMount(async () => {
     await sessionStore.init();
@@ -34,10 +36,13 @@
         <h1>ХРОНИКИ</h1>
         <span class="sub-text">Личный Дневник Воспоминаний</span>
       </div>
-      <span class="version-chip">Alpha 0.1.0</span>
+      <span class="version-chip">Beta 0.2.0</span>
     </div>
 
     <div class="bar-actions">
+      <button class="lock-action-btn" title="Настройки" on:click={() => (showSettingsModal = true)}>
+        ⚙️
+      </button>
       <button class="lock-action-btn" title="Заблокировать" on:click={handleLockApp}>
         🔒
       </button>
@@ -103,6 +108,10 @@
   <!-- Modals -->
   {#if showCreateModal}
     <CreateEntryModal on:close={() => (showCreateModal = false)} />
+  {/if}
+
+  {#if showSettingsModal}
+    <SettingsModal on:close={() => (showSettingsModal = false)} />
   {/if}
 
   {#if $sessionStore.isLocked}

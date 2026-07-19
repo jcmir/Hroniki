@@ -1202,3 +1202,85 @@ async fn test_memory_reminder_on_this_day() {
     assert_eq!(memory.source_entry_id, entry_id);
     assert_eq!(memory.object_name, "✈️ Путешествия");
 }
+
+#[tokio::test]
+async fn test_user_settings_persistence() {
+    use crate::identity::settings::{ThemeMode, UserSettings};
+
+    let mut settings = UserSettings::default();
+    settings.profile_name = Some("Алексей".to_string());
+    settings.theme = ThemeMode::Dark;
+    settings.auto_lock_minutes = 15;
+
+    let json = serde_json::to_string(&settings).unwrap();
+    let restored: UserSettings = serde_json::from_str(&json).unwrap();
+
+    assert_eq!(restored.profile_name, Some("Алексей".to_string()));
+    assert_eq!(restored.theme, ThemeMode::Dark);
+    assert_eq!(restored.auto_lock_minutes, 15);
+}
+
+#[tokio::test]
+async fn test_backup_manifest_versioning_roundtrip() {
+    use crate::commands::backup::ArchiveManifest;
+
+    let manifest = ArchiveManifest {
+        app_name: "ХРОНИКИ".to_string(),
+        version: "0.2.0-beta".to_string(),
+        schema_version: 6,
+        encryption_version: "AES-256-GCM".to_string(),
+        exported_at: chrono::Utc::now().to_rfc3339(),
+    };
+
+    let json = serde_json::to_string_pretty(&manifest).unwrap();
+    let restored: ArchiveManifest = serde_json::from_str(&json).unwrap();
+
+    assert_eq!(restored.app_name, "ХРОНИКИ");
+    assert_eq!(restored.schema_version, 6);
+    assert_eq!(restored.encryption_version, "AES-256-GCM");
+}
+
+#[tokio::test]
+async fn test_object_details_query() {
+    use crate::domain::{Category, ChronicleObject, Entry};
+    use crate::storage::{
+        connection::create_pool, migrations::run_migrations, ChronologyRepository,
+        SqliteChronologyRepository,
+    };
+
+    let temp_file = std::env::temp_dir().join(format!(
+        "hroniki_objdetails_test_{}.sqlite",
+        uuid::Uuid::new_v4()
+    ));
+    let db_url = format!(
+        "sqlite://{}",
+        temp_file.to_string_lossy().replace('\\', "/")
+    );
+
+    let pool = create_pool(&db_url).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let mut repo = SqliteChronologyRepository::new(pool.clone());
+
+    let cat = Category::new("Автомобили".to_string()).unwrap();
+    repo.save_category(cat.clone()).await.unwrap();
+
+    let obj = ChronicleObject::new(cat.id, "BMW X5", Some("Семейная машина".to_string())).unwrap();
+    repo.save_object(obj.clone()).await.unwrap();
+
+    let entry1 = Entry::new(obj.id, chrono::Utc::now(), "Замена масла".to_string(), None).unwrap();
+    let entry2 = Entry::new(
+        obj.id,
+        chrono::Utc::now(),
+        "Диагностика подвески".to_string(),
+        None,
+    )
+    .unwrap();
+    repo.save_entry_with_photos(entry1, vec![]).await.unwrap();
+    repo.save_entry_with_photos(entry2, vec![]).await.unwrap();
+
+    let stats = repo.get_object_stats(obj.id).await.unwrap();
+    assert_eq!(stats.total_entries, 2);
+    assert_eq!(stats.total_photos, 0);
+
+    pool.close().await;
+}
