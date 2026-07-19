@@ -9,6 +9,9 @@ pub mod subscriber;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+mod tests_hardening;
+
 pub use models::{RecurrenceRule, Reminder, ReminderStatus};
 pub use provider::{DummyNotificationProvider, NotificationProvider};
 pub use repository::{ReminderRepository, SqliteReminderRepository};
