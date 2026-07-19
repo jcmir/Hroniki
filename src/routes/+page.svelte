@@ -519,8 +519,9 @@
           <div class="timeline-axis"></div>
           {#if entries.length === 0}
             <div class="empty-feed">
-              <span class="empty-icon">📖</span>
-              <p>Ничего не найдено. Измените параметры поиска или добавьте запись.</p>
+              <span class="empty-icon">🌿</span>
+              <h3>Ваша история ещё не началась</h3>
+              <p>Создайте первую запись: сад, авто, дом или другое важное событие.</p>
             </div>
           {:else}
             {#each entries as item (item.id)}
@@ -591,8 +592,9 @@
           <h2 class="section-title">Ваши объекты</h2>
           {#if objects.length === 0}
             <div class="empty-tab">
-              <h3>Нет объектов</h3>
-              <p>Создайте объект через бэкенд или заполните базу.</p>
+              <div class="empty-illustration">🌱</div>
+              <h3>Создайте первый объект</h3>
+              <p>Например: Яблоня, Автомобиль, Дом, Питомец.</p>
             </div>
           {:else}
             <div class="objects-grid">
@@ -616,8 +618,8 @@
         {#if reminders.length === 0}
           <div class="empty-tab">
             <div class="empty-illustration">🔔</div>
-            <h3>Нет активных напоминаний</h3>
-            <p>Добавьте напоминание при создании записи — включите переключатель «Напомнить».</p>
+            <h3>Пока ничего не нужно повторять</h3>
+            <p>Когда появятся запланированные действия — мы напомним.</p>
           </div>
         {:else}
           <div class="reminders-list">
