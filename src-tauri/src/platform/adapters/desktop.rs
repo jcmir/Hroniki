@@ -1,5 +1,6 @@
 use super::super::notifications::NotificationPlatform;
 use super::super::permissions::{PermissionKind, PermissionPlatform, PermissionStatus};
+use super::super::schedule::SchedulePlatform;
 use super::super::storage::{SecretIdentifier, SecureStoragePlatform};
 use async_trait::async_trait;
 use std::collections::HashMap;
@@ -74,5 +75,46 @@ impl PermissionPlatform for DesktopPermissionPlatform {
 
     async fn request_permission(&self, _kind: PermissionKind) -> Result<PermissionStatus, String> {
         Ok(PermissionStatus::Granted)
+    }
+}
+
+pub struct DesktopSchedulePlatform {
+    scheduled: Arc<Mutex<HashMap<String, u64>>>,
+}
+
+impl Default for DesktopSchedulePlatform {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl DesktopSchedulePlatform {
+    pub fn new() -> Self {
+        Self {
+            scheduled: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+}
+
+#[async_trait]
+impl SchedulePlatform for DesktopSchedulePlatform {
+    async fn schedule_exact(&self, alarm_id: &str, trigger_at_ms: u64) -> Result<(), String> {
+        let mut map = self.scheduled.lock().await;
+        map.insert(alarm_id.to_string(), trigger_at_ms);
+        println!(
+            "[DesktopSchedule] Scheduled alarm '{}' at ms {}",
+            alarm_id, trigger_at_ms
+        );
+        Ok(())
+    }
+
+    async fn cancel_alarm(&self, alarm_id: &str) -> Result<(), String> {
+        let mut map = self.scheduled.lock().await;
+        if map.remove(alarm_id).is_some() {
+            println!("[DesktopSchedule] Cancelled alarm '{}'", alarm_id);
+            Ok(())
+        } else {
+            Err(format!("Desktop alarm '{}' not found", alarm_id))
+        }
     }
 }

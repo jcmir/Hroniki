@@ -18,7 +18,8 @@ use crate::{
     application::chronology::ChronologyService,
     platform::{
         adapters::{
-            DesktopNotificationPlatform, DesktopPermissionPlatform, MemorySecureStoragePlatform,
+            DesktopNotificationPlatform, DesktopPermissionPlatform, DesktopSchedulePlatform,
+            MemorySecureStoragePlatform,
         },
         PlatformCapabilities, PlatformContext,
     },
@@ -116,17 +117,20 @@ pub fn run() {
                 let platform_notifications = Arc::new(DesktopNotificationPlatform);
                 let platform_storage = Arc::new(MemorySecureStoragePlatform::new());
                 let platform_permissions = Arc::new(DesktopPermissionPlatform);
+                let platform_schedule = Arc::new(DesktopSchedulePlatform::new());
                 let platform_capabilities = PlatformCapabilities::new(
-                    true,  // Notifications
-                    false, // Biometric
-                    false, // SecureHardware
-                    false, // StrongBox
-                    true,  // BackgroundTasks
+                    true,  // notifications
+                    true,  // exact_alarms
+                    true,  // saf_backup
+                    false, // biometric
+                    false, // strongbox
+                    false, // secure_hardware
                 );
                 let platform_context = Arc::new(PlatformContext::new(
                     platform_notifications,
                     platform_storage,
                     platform_permissions,
+                    platform_schedule,
                     platform_capabilities,
                 ));
 

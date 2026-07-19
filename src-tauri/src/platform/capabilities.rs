@@ -5,26 +5,29 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PlatformCapabilities {
     pub notifications: bool,
+    pub exact_alarms: bool,
+    pub saf_backup: bool,
     pub biometric: bool,
-    pub secure_hardware: bool,
     pub strongbox: bool,
-    pub background_tasks: bool,
+    pub secure_hardware: bool,
 }
 
 impl PlatformCapabilities {
     pub fn new(
         notifications: bool,
+        exact_alarms: bool,
+        saf_backup: bool,
         biometric: bool,
-        secure_hardware: bool,
         strongbox: bool,
-        background_tasks: bool,
+        secure_hardware: bool,
     ) -> Self {
         Self {
             notifications,
+            exact_alarms,
+            saf_backup,
             biometric,
-            secure_hardware,
             strongbox,
-            background_tasks,
+            secure_hardware,
         }
     }
 }

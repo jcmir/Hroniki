@@ -5,13 +5,16 @@ use super::adapters::android::backend::{
 use super::adapters::android::storage::WrappedSecret;
 use super::adapters::{
     android::lifecycle::PlatformLifecycleEvent, AndroidLifecyclePlatform,
-    AndroidSecureStoragePlatform, DesktopNotificationPlatform, DesktopPermissionPlatform,
-    MemorySecureStoragePlatform,
+    AndroidNotificationPlatform, AndroidPermissionPlatform, AndroidSchedulePlatform,
+    AndroidSecureStoragePlatform, AndroidStorageAdapter, DesktopNotificationPlatform,
+    DesktopPermissionPlatform, DesktopSchedulePlatform, MemorySecureStoragePlatform,
 };
 use super::capabilities::PlatformCapabilities;
 use super::context::PlatformContext;
 use super::lifecycle::{LifecycleEvent, LifecycleTranslator};
-use super::permissions::PermissionKind;
+use super::permissions::{PermissionKind, PermissionPlatform, PermissionStatus};
+use super::schedule::SchedulePlatform;
+use super::session::SessionManager;
 use super::storage::{SecretIdentifier, SecretKind, SecureStoragePlatform};
 use crate::events::DomainEvent;
 use crate::events::EventBus;
@@ -343,9 +346,10 @@ async fn test_platform_context_initialization() {
     let notifications = Arc::new(DesktopNotificationPlatform);
     let storage = Arc::new(MemorySecureStoragePlatform::new());
     let permissions = Arc::new(DesktopPermissionPlatform);
-    let capabilities = PlatformCapabilities::new(true, false, false, false, true);
+    let schedule = Arc::new(DesktopSchedulePlatform::new());
+    let capabilities = PlatformCapabilities::new(true, true, true, false, false, false);
 
-    let context = PlatformContext::new(notifications, storage, permissions, capabilities);
+    let context = PlatformContext::new(notifications, storage, permissions, schedule, capabilities);
 
     // Call and check permissions
     let status = context
@@ -357,6 +361,8 @@ async fn test_platform_context_initialization() {
 
     // Verify capabilities
     assert!(context.capabilities.notifications);
+    assert!(context.capabilities.exact_alarms);
+    assert!(context.capabilities.saf_backup);
     assert!(!context.capabilities.biometric);
     assert!(!context.capabilities.strongbox);
 }
@@ -527,4 +533,156 @@ async fn test_java_exception_roundtrip() {
     };
     let unwrap_res = bridge.decrypt(&dummy).await;
     assert_eq!(unwrap_res.unwrap_err(), KeyStoreError::BackendUnavailable);
+}
+
+#[tokio::test]
+async fn test_android_notifications_channels_contract() {
+    let platform = AndroidNotificationPlatform::new("default_channel", "Default Channel", 3);
+
+    // Create custom channel
+    platform
+        .create_channel("alerts_channel", "Critical Alerts", 4)
+        .await;
+
+    let channel = platform.get_channel("alerts_channel").await.unwrap();
+    assert_eq!(channel.name, "Critical Alerts");
+
+    // Show notification on custom channel
+    platform
+        .show_on_channel("System Alert", Some("High CPU usage"), "alerts_channel")
+        .await
+        .unwrap();
+
+    assert_eq!(platform.posted_count().await, 1);
+
+    // Reject non-existent channel
+    let err = platform
+        .show_on_channel("Test", None, "missing_channel")
+        .await;
+    assert!(err.is_err());
+}
+
+#[tokio::test]
+async fn test_android_permissions_contract() {
+    let platform_android_13 = AndroidPermissionPlatform::new(33);
+
+    // POST_NOTIFICATIONS on Android 13+ is NotDetermined initially
+    let status_notif = platform_android_13
+        .check_permission(PermissionKind::Notifications)
+        .await
+        .unwrap();
+    assert_eq!(status_notif, PermissionStatus::NotDetermined);
+
+    // Request notification permission
+    let req_status = platform_android_13
+        .request_permission(PermissionKind::Notifications)
+        .await
+        .unwrap();
+    assert_eq!(req_status, PermissionStatus::Granted);
+
+    // Check again
+    let status_post_req = platform_android_13
+        .check_permission(PermissionKind::Notifications)
+        .await
+        .unwrap();
+    assert_eq!(status_post_req, PermissionStatus::Granted);
+
+    // Check pre-Android 13 permissions
+    let platform_android_11 = AndroidPermissionPlatform::new(30);
+    let pre_13_status = platform_android_11
+        .check_permission(PermissionKind::Notifications)
+        .await
+        .unwrap();
+    assert_eq!(pre_13_status, PermissionStatus::Granted);
+}
+
+#[tokio::test]
+async fn test_android_schedule_alarm_contract() {
+    let scheduler = AndroidSchedulePlatform::new();
+    let alarm_id = "reminder_alarm_101";
+
+    // Schedule exact alarm
+    scheduler
+        .schedule_exact(alarm_id, 1700000000000)
+        .await
+        .unwrap();
+    assert!(scheduler.is_scheduled(alarm_id).await);
+
+    // Cancel alarm
+    scheduler.cancel_alarm(alarm_id).await.unwrap();
+    assert!(!scheduler.is_scheduled(alarm_id).await);
+
+    // Cancel non-existent alarm returns error
+    let cancel_err = scheduler.cancel_alarm(alarm_id).await;
+    assert!(cancel_err.is_err());
+}
+
+#[tokio::test]
+async fn test_android_saf_storage_boundary_contract() {
+    let saf_adapter = AndroidStorageAdapter::new();
+    let saf_uri = "content://com.android.providers.downloads.documents/document/42";
+    let backup_data = b"ENCRYPTED_SQLITE_BACKUP_BYTES_12345";
+
+    // Export archive to SAF URI
+    saf_adapter
+        .export_backup_archive(saf_uri, backup_data)
+        .await
+        .unwrap();
+
+    assert!(saf_adapter.contains_saf_uri(saf_uri).await);
+
+    // Import archive from SAF URI
+    let imported = saf_adapter.import_backup_archive(saf_uri).await.unwrap();
+    assert_eq!(imported, backup_data);
+
+    // Invalid URI format rejected
+    let invalid_err = saf_adapter
+        .export_backup_archive("invalid_path/file.bin", backup_data)
+        .await;
+    assert!(invalid_err.is_err());
+}
+
+#[tokio::test]
+async fn test_session_manager_memory_clear_on_lock() {
+    let event_bus = Arc::new(EventBus::new());
+    let session_mgr = Arc::new(SessionManager::new());
+    session_mgr.start_event_listener(&event_bus);
+
+    // Populate RAM tokens & decrypted cache
+    session_mgr
+        .set_token("session_token_1", b"active_jwt_token".to_vec())
+        .await;
+    session_mgr
+        .set_cache("user_profile_cache", b"decrypted_user_json".to_vec())
+        .await;
+
+    assert!(session_mgr.get_token("session_token_1").await.is_some());
+    assert!(session_mgr.get_cache("user_profile_cache").await.is_some());
+    assert!(!session_mgr.is_locked().await);
+
+    // Trigger DomainEvent::ApplicationLocked
+    event_bus.publish(DomainEvent::ApplicationLocked);
+
+    // Wait briefly for asynchronous background task handling
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    // Verify RAM memory cleared and session locked
+    assert!(session_mgr.get_token("session_token_1").await.is_none());
+    assert!(session_mgr.get_cache("user_profile_cache").await.is_none());
+    assert!(session_mgr.is_locked().await);
+}
+
+#[test]
+fn test_platform_capabilities_serialization() {
+    let capabilities = PlatformCapabilities::new(true, true, true, false, true, false);
+    let json = serde_json::to_string(&capabilities).unwrap();
+    let deserialized: PlatformCapabilities = serde_json::from_str(&json).unwrap();
+
+    assert_eq!(capabilities, deserialized);
+    assert!(deserialized.notifications);
+    assert!(deserialized.exact_alarms);
+    assert!(deserialized.saf_backup);
+    assert!(!deserialized.biometric);
+    assert!(deserialized.strongbox);
+    assert!(!deserialized.secure_hardware);
 }
