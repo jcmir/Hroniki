@@ -15,9 +15,6 @@ pub type AppService =
 
 
 pub struct AppState {
-
-    pub service:
-        Arc<
-            Mutex<AppService>
-        >,
+    pub service: Arc<Mutex<AppService>>,
+    pub event_bus: Arc<crate::events::EventBus>,
 }

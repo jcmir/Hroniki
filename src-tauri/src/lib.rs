@@ -7,6 +7,7 @@ pub mod identity;
 pub mod security;
 pub mod account;
 pub mod features;
+pub mod events;
 
 
 use std::sync::Arc;
@@ -55,8 +56,11 @@ pub fn run() {
 
                 crate::application::bootstrap::start_reminder_scheduler(pool.clone(), app_handle.clone());
 
+                let event_bus = Arc::new(crate::events::EventBus::new());
+
                 app.manage(AppState {
                     service: Arc::new(Mutex::new(service)),
+                    event_bus,
                 });
             });
 
