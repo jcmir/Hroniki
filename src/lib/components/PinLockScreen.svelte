@@ -1,5 +1,6 @@
 <script lang="ts">
   import { fade, scale } from 'svelte/transition';
+  import { onDestroy } from 'svelte';
 
   interface Props {
     onVerify: (pin: string) => Promise<boolean>;
@@ -35,6 +36,10 @@
     }, 1000);
   }
 
+  onDestroy(() => {
+    if (cooldownTimer) clearInterval(cooldownTimer);
+  });
+
   async function handleKey(num: string) {
     if (verifying || enteredPin.length >= 4 || cooldownSecs > 0) return;
     enteredPin += num;
@@ -54,10 +59,10 @@
         shake = true;
         failCount += 1;
         if (failCount >= MAX_ATTEMPTS) {
-          errorMsg = '';
-          startCooldown();
+          errorMsg = 'Слишком много попыток';
+          setTimeout(() => { errorMsg = ''; startCooldown(); }, 900);
         } else {
-          errorMsg = `Неверный PIN-код`;
+          errorMsg = 'Неверный PIN-код';
         }
         setTimeout(() => { shake = false; }, 500);
       }
