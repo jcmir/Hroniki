@@ -1,46 +1,55 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap');
 
 :root {
-  --primary-purple: #6025ff;
-  --primary-pink: #ff5555;
-  --gradient-main: linear-gradient(135deg, #6025ff, #ff5555);
-  --background: #fdfafb;
-  --surface: rgba(255, 255, 255, 0.9);
-  --surface-opaque: #ffffff;
-  --card-shadow: 0 16px 40px rgba(96, 37, 255, 0.08);
-  --text: #1c1921;
-  --muted: #8c8896;
-  --light-gray: #f4eff2;
-  --radius-xl: 28px;
-  --radius-lg: 20px;
-  --radius-md: 14px;
-  --font-main: 'Outfit', sans-serif;
-  --accent-green: #34c759;
-  --accent-green-bg: #eaf9ee;
-  --accent-blue: #007aff;
-  --accent-blue-bg: #e6f2ff;
-  --accent-pink: #ff2d55;
-  --accent-pink-bg: #ffe6eb;
-  --accent-orange: #ff9500;
-  --accent-orange-bg: #fff4e6;
+  --bg-app: #0d0f12;
+  --bg-surface: #161920;
+  --bg-surface-elevated: #1e222d;
+  --bg-glass: rgba(22, 25, 32, 0.85);
+  
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-accent: rgba(245, 158, 11, 0.25);
+  
+  --text-main: #f3f4f6;
+  --text-muted: #9ca3af;
+  --text-subtle: #6b7280;
+  
+  --accent-amber: #f59e0b;
+  --accent-amber-glow: rgba(245, 158, 11, 0.15);
+  --accent-sapphire: #3b82f6;
+  --accent-crimson: #ef4444;
+  --accent-emerald: #10b981;
+  
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-pill: 9999px;
+  
+  --shadow-card: 0 12px 32px rgba(0, 0, 0, 0.35);
+  --shadow-glow: 0 0 24px rgba(245, 158, 11, 0.2);
+  
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-heading: 'Outfit', var(--font-sans);
 }
 
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  touch-action: manipulation;
 }
 
-body {
-  font-family: var(--font-main);
-  background-color: var(--background);
-  color: var(--text);
+html, body {
+  width: 100%;
+  height: 100%;
+  background-color: var(--bg-app);
+  color: var(--text-main);
+  font-family: var(--font-sans);
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Beautiful scrollbars */
+/* Custom Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -49,9 +58,18 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(96, 37, 255, 0.15);
-  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-pill);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(96, 37, 255, 0.3);
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Touch active states */
+button, a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:active {
+  transform: scale(0.98);
 }

@@ -802,3 +802,130 @@ async fn test_capabilities_provider_dynamic_refresh() {
     assert_eq!(refreshed, updated);
     assert!(provider.current().exact_alarms);
 }
+
+#[tokio::test]
+async fn test_ipc_entries_dto_contract() {
+    use crate::domain::{ChronicleObjectId, Entry};
+
+    let dummy_entry = Entry::new(
+        ChronicleObjectId::new(),
+        chrono::Utc::now(),
+        "Заголовок хроники".to_string(),
+        Some("Описание события".to_string()),
+    )
+    .unwrap();
+
+    let json = serde_json::to_string(&dummy_entry).unwrap();
+    assert!(json.contains("title"));
+    assert!(json.contains("Заголовок хроники"));
+    assert!(json.contains("occurred_at"));
+}
+
+#[tokio::test]
+async fn test_entry_creation_persistence_after_restart() {
+    use crate::domain::{Category, ChronicleObject, Entry};
+    use crate::storage::{
+        connection::create_pool, migrations::run_migrations, ChronologyRepository,
+        SqliteChronologyRepository,
+    };
+
+    let temp_file = std::env::temp_dir().join(format!(
+        "hroniki_test_persist_{}.sqlite",
+        uuid::Uuid::new_v4()
+    ));
+    let db_url = format!(
+        "sqlite://{}",
+        temp_file.to_string_lossy().replace('\\', "/")
+    );
+
+    // 1. Initial pool and data creation
+    let pool1 = create_pool(&db_url).await.unwrap();
+    run_migrations(&pool1).await.unwrap();
+    let mut repo1 = SqliteChronologyRepository::new(pool1.clone());
+
+    let cat = Category::new("Путешествия".to_string()).unwrap();
+    repo1.save_category(cat.clone()).await.unwrap();
+
+    let obj = ChronicleObject::new(cat.id, "Поездка в Алтай".to_string(), None).unwrap();
+    repo1.save_object(obj.clone()).await.unwrap();
+
+    let entry = Entry::new(
+        obj.id,
+        chrono::Utc::now(),
+        "День 1: Горы".to_string(),
+        Some("Отличный вид".to_string()),
+    )
+    .unwrap();
+    repo1
+        .save_entry_with_photos(entry.clone(), vec![])
+        .await
+        .unwrap();
+
+    pool1.close().await;
+
+    // 2. Simulated app restart: open new connection pool to same DB
+    let pool2 = create_pool(&db_url).await.unwrap();
+    let repo2 = SqliteChronologyRepository::new(pool2.clone());
+
+    let loaded_entries = repo2.entries().await.unwrap();
+    assert_eq!(loaded_entries.len(), 1);
+    assert_eq!(loaded_entries[0].title, "День 1: Горы");
+
+    pool2.close().await;
+}
+
+#[tokio::test]
+async fn test_lock_session_ram_clear_and_database_persistence() {
+    use crate::domain::{Category, ChronicleObject, Entry};
+    use crate::storage::{
+        connection::create_pool, migrations::run_migrations, ChronologyRepository,
+        SqliteChronologyRepository,
+    };
+
+    let temp_file = std::env::temp_dir().join(format!(
+        "hroniki_test_lock_persist_{}.sqlite",
+        uuid::Uuid::new_v4()
+    ));
+    let db_url = format!(
+        "sqlite://{}",
+        temp_file.to_string_lossy().replace('\\', "/")
+    );
+
+    let pool = create_pool(&db_url).await.unwrap();
+    run_migrations(&pool).await.unwrap();
+    let mut repo = SqliteChronologyRepository::new(pool.clone());
+
+    let cat = Category::new("Личное".to_string()).unwrap();
+    repo.save_category(cat.clone()).await.unwrap();
+    let obj = ChronicleObject::new(cat.id, "Дневник".to_string(), None).unwrap();
+    repo.save_object(obj.clone()).await.unwrap();
+    let entry = Entry::new(
+        obj.id,
+        chrono::Utc::now(),
+        "Запись до блокировки".to_string(),
+        None,
+    )
+    .unwrap();
+    repo.save_entry_with_photos(entry, vec![]).await.unwrap();
+
+    // Session lock event -> RAM SessionManager cleared
+    let event_bus = Arc::new(EventBus::new());
+    let session_mgr = Arc::new(SessionManager::new());
+    session_mgr.start_event_listener(&event_bus);
+
+    session_mgr
+        .set_token("active_jwt", b"secret".to_vec())
+        .await;
+    event_bus.publish(DomainEvent::ApplicationLocked);
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    // Verify RAM token cleared
+    assert!(session_mgr.get_token("active_jwt").await.is_none());
+
+    // Verify database on disk remains 100% intact and readable
+    let loaded = repo.entries().await.unwrap();
+    assert_eq!(loaded.len(), 1);
+    assert_eq!(loaded[0].title, "Запись до блокировки");
+
+    pool.close().await;
+}
