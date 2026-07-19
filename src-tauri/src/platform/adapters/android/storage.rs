@@ -13,6 +13,24 @@ pub struct WrappedSecret {
     pub tag: Vec<u8>,
 }
 
+impl WrappedSecret {
+    pub fn validate(&self) -> Result<(), super::backend::KeyStoreError> {
+        if self.version != 1 {
+            return Err(super::backend::KeyStoreError::InvalidVersion(self.version));
+        }
+        if self.algorithm != "AES-GCM-NoPadding" {
+            return Err(super::backend::KeyStoreError::InvalidSecretFormat);
+        }
+        if self.nonce.len() != 12 {
+            return Err(super::backend::KeyStoreError::InvalidSecretFormat);
+        }
+        if self.tag.len() != 16 {
+            return Err(super::backend::KeyStoreError::InvalidSecretFormat);
+        }
+        Ok(())
+    }
+}
+
 pub struct AndroidSecureStoragePlatform {
     backend: Arc<dyn KeyStoreBackend>,
     simulated_store: Arc<tokio::sync::Mutex<std::collections::HashMap<String, WrappedSecret>>>,

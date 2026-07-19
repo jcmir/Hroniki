@@ -92,19 +92,70 @@ async fn test_nonce_uniqueness_and_ciphertext_safety() {
 }
 
 #[tokio::test]
-async fn test_unknown_version_rejection() {
-    let backend = MemoryKeyStoreBackend::new();
-    let bad_secret = WrappedSecret {
-        version: 999,
+async fn test_wrong_master_key_rejected() {
+    let backend_a = MemoryKeyStoreBackend::new();
+    let backend_b = MemoryKeyStoreBackend::new(); // Has a different random master key
+
+    let plaintext = b"secret_database_decryption_password";
+    let wrapped = backend_a.wrap_key(plaintext).await.unwrap();
+
+    // Trying to decrypt with backend_b should fail with DecryptionFailed
+    let result = backend_b.unwrap_key(&wrapped).await;
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err(), KeyStoreError::DecryptionFailed);
+}
+
+#[tokio::test]
+async fn test_wrapped_secret_validation() {
+    // 1. Nonce length != 12 validation
+    let bad_nonce = WrappedSecret {
+        version: 1,
+        algorithm: "AES-GCM-NoPadding".to_string(),
+        nonce: vec![0u8; 11], // 11 bytes instead of 12
+        ciphertext: vec![1, 2, 3],
+        tag: vec![0u8; 16],
+    };
+    assert_eq!(bad_nonce.validate().unwrap_err(), KeyStoreError::InvalidSecretFormat);
+
+    // 2. Tag length != 16 validation
+    let bad_tag = WrappedSecret {
+        version: 1,
+        algorithm: "AES-GCM-NoPadding".to_string(),
+        nonce: vec![0u8; 12],
+        ciphertext: vec![1, 2, 3],
+        tag: vec![0u8; 15], // 15 bytes instead of 16
+    };
+    assert_eq!(bad_tag.validate().unwrap_err(), KeyStoreError::InvalidSecretFormat);
+
+    // 3. Algorithm validation
+    let bad_algo = WrappedSecret {
+        version: 1,
+        algorithm: "AES-CBC".to_string(), // unsupported algorithm
+        nonce: vec![0u8; 12],
+        ciphertext: vec![1, 2, 3],
+        tag: vec![0u8; 16],
+    };
+    assert_eq!(bad_algo.validate().unwrap_err(), KeyStoreError::InvalidSecretFormat);
+
+    // 4. Version validation
+    let bad_version = WrappedSecret {
+        version: 999, // unsupported version
         algorithm: "AES-GCM-NoPadding".to_string(),
         nonce: vec![0u8; 12],
         ciphertext: vec![1, 2, 3],
         tag: vec![0u8; 16],
     };
+    assert_eq!(bad_version.validate().unwrap_err(), KeyStoreError::InvalidVersion(999));
 
-    let result = backend.unwrap_key(&bad_secret).await;
-    assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), KeyStoreError::InvalidVersion(999));
+    // 5. Empty struct does not panic
+    let empty_secret = WrappedSecret {
+        version: 0,
+        algorithm: "".to_string(),
+        nonce: vec![],
+        ciphertext: vec![],
+        tag: vec![],
+    };
+    assert!(empty_secret.validate().is_err());
 }
 
 #[tokio::test]

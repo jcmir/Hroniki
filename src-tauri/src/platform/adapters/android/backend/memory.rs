@@ -54,9 +54,7 @@ impl KeyStoreBackend for MemoryKeyStoreBackend {
     }
 
     async fn unwrap_key(&self, secret: &WrappedSecret) -> Result<Vec<u8>, KeyStoreError> {
-        if secret.version != 1 {
-            return Err(KeyStoreError::InvalidVersion(secret.version));
-        }
+        secret.validate()?;
 
         let cipher = Aes256Gcm::new_from_slice(&self.master_key)
             .map_err(|_| KeyStoreError::DecryptionFailed)?;
