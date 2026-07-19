@@ -14,8 +14,29 @@
   let errorMsg = $state('');
   let successAnim = $state(false);
 
+  // Brute-force protection
+  const MAX_ATTEMPTS = 5;
+  const LOCKOUT_SECONDS = 15;
+  let failCount = $state(0);
+  let cooldownSecs = $state(0);
+  let cooldownTimer: ReturnType<typeof setInterval> | null = null;
+
+  function startCooldown() {
+    cooldownSecs = LOCKOUT_SECONDS;
+    cooldownTimer = setInterval(() => {
+      cooldownSecs -= 1;
+      if (cooldownSecs <= 0) {
+        clearInterval(cooldownTimer!);
+        cooldownTimer = null;
+        cooldownSecs = 0;
+        errorMsg = '';
+        failCount = 0;
+      }
+    }, 1000);
+  }
+
   async function handleKey(num: string) {
-    if (verifying || enteredPin.length >= 4) return;
+    if (verifying || enteredPin.length >= 4 || cooldownSecs > 0) return;
     enteredPin += num;
     errorMsg = '';
 
@@ -31,14 +52,20 @@
         enteredPin = '';
         verifying = false;
         shake = true;
-        errorMsg = 'Неверный PIN-код';
+        failCount += 1;
+        if (failCount >= MAX_ATTEMPTS) {
+          errorMsg = '';
+          startCooldown();
+        } else {
+          errorMsg = `Неверный PIN-код`;
+        }
         setTimeout(() => { shake = false; }, 500);
       }
     }
   }
 
   function handleBackspace() {
-    if (enteredPin.length > 0 && !verifying) {
+    if (enteredPin.length > 0 && !verifying && cooldownSecs === 0) {
       enteredPin = enteredPin.slice(0, -1);
       errorMsg = '';
     }
@@ -74,10 +101,33 @@
 
     <!-- Status text -->
     <div class="lock-status" in:fade={{ duration: 400, delay: 200 }}>
-      <p class="status-text" class:error-text={!!errorMsg}>
-        {errorMsg || (verifying ? 'Проверка…' : 'Введите PIN-код')}
-      </p>
+      {#if cooldownSecs > 0}
+        <div class="cooldown-block" in:fade={{ duration: 200 }}>
+          <p class="status-text cooldown-text">
+            Попробуйте снова через {cooldownSecs} с
+          </p>
+          <div class="cooldown-bar-wrap">
+            <div
+              class="cooldown-bar"
+              style="width: {(cooldownSecs / 15) * 100}%"
+            ></div>
+          </div>
+        </div>
+      {:else}
+        <p class="status-text" class:error-text={!!errorMsg}>
+          {errorMsg || (verifying ? 'Проверка…' : 'Введите PIN-код')}
+        </p>
+      {/if}
     </div>
+
+    <!-- Attempt counter (visible after first fail) -->
+    {#if failCount > 0 && cooldownSecs === 0}
+      <p class="attempt-counter" in:fade={{ duration: 200 }}>
+        {failCount} из {5} попыток использовано
+      </p>
+    {:else if cooldownSecs === 0}
+      <p class="attempt-counter attempt-counter--hidden"> </p>
+    {/if}
 
     <!-- PIN Dots -->
     <div class="dots-row" in:scale={{ duration: 400, delay: 250, start: 0.8 }}>
@@ -98,13 +148,13 @@
           class="key-btn"
           id="pin-key-{num}"
           onclick={() => handleKey(num)}
-          disabled={verifying}
+          disabled={verifying || cooldownSecs > 0}
         >
           <span class="key-num">{num}</span>
           <span class="key-letters">{['', 'ABC', 'DEF', 'GHI', 'JKL', 'MNO', 'PQRS', 'TUV', 'WXYZ'][parseInt(num)]}</span>
         </button>
       {/each}
-      <button type="button" class="key-btn action-key" onclick={() => enteredPin = ''} disabled={verifying}>
+      <button type="button" class="key-btn action-key" onclick={() => enteredPin = ''} disabled={verifying || cooldownSecs > 0}>
         Сброс
       </button>
       <button
@@ -112,7 +162,7 @@
         class="key-btn"
         id="pin-key-0"
         onclick={() => handleKey('0')}
-        disabled={verifying}
+        disabled={verifying || cooldownSecs > 0}
       >
         <span class="key-num">0</span>
       </button>
@@ -213,8 +263,11 @@
   }
 
   .lock-status {
-    height: 22px;
-    margin-bottom: 24px;
+    min-height: 44px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .status-text {
@@ -229,6 +282,52 @@
   .status-text.error-text {
     color: #f87171;
     font-weight: 500;
+  }
+
+  /* Cooldown styles */
+  .cooldown-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .cooldown-text {
+    color: #fb923c !important;
+    font-weight: 500;
+    font-size: 0.9rem;
+  }
+
+  .cooldown-bar-wrap {
+    width: 120px;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .cooldown-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #fb923c, #f97316);
+    border-radius: 2px;
+    transition: width 0.9s linear;
+  }
+
+  /* Attempt counter */
+  .attempt-counter {
+    font-size: 0.72rem;
+    color: rgba(251, 146, 60, 0.7);
+    text-align: center;
+    margin: 0 0 12px;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+  }
+
+  .attempt-counter--hidden {
+    color: transparent;
+    pointer-events: none;
+    margin: 0 0 12px;
   }
 
   .dots-row {
