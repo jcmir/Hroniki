@@ -4,6 +4,7 @@ pub mod commands;
 pub mod domain;
 pub mod storage;
 pub mod identity;
+pub mod security;
 
 
 use std::sync::Arc;
