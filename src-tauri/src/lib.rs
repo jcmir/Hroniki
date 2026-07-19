@@ -3,6 +3,8 @@ pub mod application;
 pub mod commands;
 pub mod domain;
 pub mod storage;
+pub mod identity;
+
 
 use std::sync::Arc;
 use tauri::Manager;
