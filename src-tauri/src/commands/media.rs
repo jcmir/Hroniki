@@ -74,3 +74,13 @@ pub fn cleanup_staging(app: &tauri::AppHandle) -> Result<(), String> {
     }
     Ok(())
 }
+
+#[tauri::command]
+pub async fn cleanup_media(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, crate::app_state::AppState>,
+) -> Result<(), String> {
+    let service = state.service.lock().await;
+    let pool = service.repository().pool();
+    crate::application::bootstrap::cleanup_orphan_media(pool, &app).await
+}

@@ -30,29 +30,63 @@ pub async fn create_entry(
         }
     }
 
-    // Persist entry and photos atomically
-    service
-        .repository_mut()
-        .save_entry_with_photos(entry.clone(), photos)
-        .await
-        .map_err(|e| e.to_string())?;
+    // Prepare list of successfully moved paths for potential rollback
+    let mut moved_paths = Vec::new();
+    let mut move_failed = false;
+    let mut error_msg = String::new();
 
-    // If database transaction succeeded, rename staging files to originals
-    if let Some(filenames) = image_filenames {
+    if let Some(ref filenames) = image_filenames {
         if let Ok(app_data_dir) = app.path().app_data_dir() {
             let staging_dir = app_data_dir.join("media").join("staging");
             let originals_dir = app_data_dir.join("media").join("originals");
+
             for filename in filenames {
-                let staging_path = staging_dir.join(&filename);
-                let originals_path = originals_dir.join(&filename);
+                let staging_path = staging_dir.join(filename);
+                let originals_path = originals_dir.join(filename);
+
                 if staging_path.exists() {
-                    std::fs::rename(staging_path, originals_path).map_err(|e| e.to_string())?;
+                    if let Err(e) = std::fs::rename(&staging_path, &originals_path) {
+                        move_failed = true;
+                        error_msg = format!("Failed to move file to originals: {}", e);
+                        break;
+                    } else {
+                        moved_paths.push((staging_path, originals_path));
+                    }
+                } else {
+                    move_failed = true;
+                    error_msg = format!("Staged file does not exist: {}", filename);
+                    break;
                 }
             }
         }
     }
 
-    Ok(entry.id.value().to_string())
+    if move_failed {
+        // Rollback: move any successfully moved files back to staging
+        for (staging_path, originals_path) in moved_paths {
+            let _ = std::fs::rename(originals_path, staging_path);
+        }
+        return Err(error_msg);
+    }
+
+    // Persist entry and photos atomically in DB
+    match service
+        .repository_mut()
+        .save_entry_with_photos(entry.clone(), photos)
+        .await
+    {
+        Ok(_) => {
+            // Success! Transaction committed, files are in originals.
+            Ok(entry.id.value().to_string())
+        }
+        Err(db_err) => {
+            // DB transaction failed. Rollback: move files back to staging
+            for (staging_path, originals_path) in moved_paths {
+                let _ = std::fs::rename(originals_path, staging_path);
+            }
+            Err(format!("Database error: {}", db_err))
+        }
+    }
 }
 
 #[tauri::command]

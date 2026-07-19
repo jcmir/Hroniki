@@ -17,6 +17,7 @@ use crate::{
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let app_handle = app.handle().clone();
             let app_data_dir = app.path().app_data_dir().expect("failed to get app data dir");
@@ -47,6 +48,8 @@ pub fn run() {
                     .await
                     .expect("failed to initialize application");
 
+                crate::application::bootstrap::start_reminder_scheduler(pool.clone(), app_handle.clone());
+
                 app.manage(AppState {
                     service: Arc::new(Mutex::new(service)),
                 });
@@ -67,6 +70,7 @@ pub fn run() {
             commands::media::select_images,
             commands::media::save_media,
             commands::media::get_media_path,
+            commands::media::cleanup_media,
             commands::reminders::create_reminder,
             commands::reminders::get_reminders,
             commands::reminders::complete_reminder,

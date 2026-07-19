@@ -13,6 +13,10 @@ impl SqliteChronologyRepository {
     pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
     }
+
+    pub fn pool(&self) -> &SqlitePool {
+        &self.pool
+    }
 }
 
 #[async_trait::async_trait]
