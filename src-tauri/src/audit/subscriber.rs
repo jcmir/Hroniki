@@ -1,7 +1,7 @@
+use super::service::AuditService;
+use crate::events::{DomainEvent, EventBus};
 use std::sync::Arc;
 use tokio::sync::broadcast;
-use crate::events::{EventBus, DomainEvent};
-use super::service::AuditService;
 
 pub struct AuditSubscriber {
     event_bus: Arc<EventBus>,
@@ -26,32 +26,69 @@ impl AuditSubscriber {
                     Ok(event) => {
                         let result = match event {
                             DomainEvent::UserRegistered { user_id, email } => {
-                                let details = format!(r#"{{"email":{}}}"#, email.map(|e| format!("\"{}\"", e)).unwrap_or_else(|| "null".to_string()));
-                                service.record_event(Some(user_id), "UserRegistered", Some(details)).await
+                                let details = format!(
+                                    r#"{{"email":{}}}"#,
+                                    email
+                                        .map(|e| format!("\"{}\"", e))
+                                        .unwrap_or_else(|| "null".to_string())
+                                );
+                                service
+                                    .record_event(Some(user_id), "UserRegistered", Some(details))
+                                    .await
                             }
                             DomainEvent::UserAuthenticated { user_id, success } => {
                                 let details = format!(r#"{{"success":{}}}"#, success);
-                                service.record_event(Some(user_id), "UserAuthenticated", Some(details)).await
+                                service
+                                    .record_event(Some(user_id), "UserAuthenticated", Some(details))
+                                    .await
                             }
-                            DomainEvent::SessionOpened { session_id, user_id, device_name } => {
-                                let details = format!(r#"{{"session_id":"{}","device_name":{}}}"#, session_id, device_name.map(|d| format!("\"{}\"", d)).unwrap_or_else(|| "null".to_string()));
-                                service.record_event(Some(user_id), "SessionOpened", Some(details)).await
+                            DomainEvent::SessionOpened {
+                                session_id,
+                                user_id,
+                                device_name,
+                            } => {
+                                let details = format!(
+                                    r#"{{"session_id":"{}","device_name":{}}}"#,
+                                    session_id,
+                                    device_name
+                                        .map(|d| format!("\"{}\"", d))
+                                        .unwrap_or_else(|| "null".to_string())
+                                );
+                                service
+                                    .record_event(Some(user_id), "SessionOpened", Some(details))
+                                    .await
                             }
                             DomainEvent::SessionClosed { session_id } => {
                                 let details = format!(r#"{{"session_id":"{}"}}"#, session_id);
-                                service.record_event(None, "SessionClosed", Some(details)).await
+                                service
+                                    .record_event(None, "SessionClosed", Some(details))
+                                    .await
                             }
                             DomainEvent::ArchiveExported { user_id, path } => {
-                                let details = format!(r#"{{"path":"{}"}}"#, path.replace('\\', "/"));
-                                service.record_event(user_id, "ArchiveExported", Some(details)).await
+                                let details =
+                                    format!(r#"{{"path":"{}"}}"#, path.replace('\\', "/"));
+                                service
+                                    .record_event(user_id, "ArchiveExported", Some(details))
+                                    .await
                             }
                             DomainEvent::ArchiveImported { user_id, success } => {
                                 let details = format!(r#"{{"success":{}}}"#, success);
-                                service.record_event(user_id, "ArchiveImported", Some(details)).await
+                                service
+                                    .record_event(user_id, "ArchiveImported", Some(details))
+                                    .await
                             }
-                            DomainEvent::PlanUpdated { user_id, plan, updated_at } => {
-                                let details = format!(r#"{{"plan":"{}","updated_at":"{}"}}"#, plan, updated_at);
-                                service.record_event(Some(user_id), "PlanUpdated", Some(details)).await
+                            DomainEvent::PlanUpdated {
+                                user_id,
+                                plan,
+                                updated_at,
+                            } => {
+                                let details = format!(
+                                    r#"{{"plan":"{}","updated_at":"{}"}}"#,
+                                    plan, updated_at
+                                );
+                                service
+                                    .record_event(Some(user_id), "PlanUpdated", Some(details))
+                                    .await
                             }
                             _ => Ok(()),
                         };
@@ -83,8 +120,12 @@ mod tests {
         let temp_dir = std::env::temp_dir();
         let db_file = temp_dir.join(format!("hroniki_test_audit_sub_{}.sqlite", Uuid::new_v4()));
         let db_url = format!("sqlite://{}", db_file.to_string_lossy().replace('\\', "/"));
-        let pool = crate::storage::connection::create_pool(&db_url).await.unwrap();
-        crate::storage::migrations::run_migrations(&pool).await.unwrap();
+        let pool = crate::storage::connection::create_pool(&db_url)
+            .await
+            .unwrap();
+        crate::storage::migrations::run_migrations(&pool)
+            .await
+            .unwrap();
         pool
     }
 
@@ -99,7 +140,7 @@ mod tests {
         subscriber.start();
 
         let user_id = Uuid::new_v4().to_string();
-        
+
         // Seed user to satisfy foreign keys
         sqlx::query("INSERT INTO users (id, email, display_name, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)")
             .bind(&user_id)
@@ -130,4 +171,3 @@ mod tests {
         pool.close().await;
     }
 }
-

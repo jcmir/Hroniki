@@ -1,6 +1,6 @@
 use crate::application::chronology::ChronologyService;
-use crate::storage::{migrations::run_migrations, ChronologyRepository};
 use crate::commands::media::cleanup_staging;
+use crate::storage::{migrations::run_migrations, ChronologyRepository};
 use sqlx::SqlitePool;
 use tauri::Manager;
 
@@ -22,11 +22,10 @@ where
     let _ = cleanup_orphan_media(pool, app).await;
 
     // Check app_metadata for default_seed_version
-    let seed_check: Result<Option<(String,)>, sqlx::Error> = sqlx::query_as(
-        "SELECT value FROM app_metadata WHERE key = 'default_seed_version'"
-    )
-    .fetch_optional(pool)
-    .await;
+    let seed_check: Result<Option<(String,)>, sqlx::Error> =
+        sqlx::query_as("SELECT value FROM app_metadata WHERE key = 'default_seed_version'")
+            .fetch_optional(pool)
+            .await;
 
     let is_seeded = match seed_check {
         Ok(Some((val,))) => val == "1",
@@ -76,10 +75,7 @@ where
     Ok(())
 }
 
-pub async fn cleanup_orphan_media(
-    pool: &SqlitePool,
-    app: &tauri::AppHandle,
-) -> Result<(), String> {
+pub async fn cleanup_orphan_media(pool: &SqlitePool, app: &tauri::AppHandle) -> Result<(), String> {
     // 1. Fetch all photo paths from the database
     let rows: Result<Vec<(String,)>, sqlx::Error> = sqlx::query_as("SELECT path FROM photos")
         .fetch_all(pool)
@@ -103,7 +99,10 @@ pub async fn cleanup_orphan_media(
                             if !db_photo_filenames.contains(&filename) {
                                 // Delete orphan file and log error if failed
                                 if let Err(e) = std::fs::remove_file(&path) {
-                                    eprintln!("Warning: Failed to remove orphan file {:?}: {}", path, e);
+                                    eprintln!(
+                                        "Warning: Failed to remove orphan file {:?}: {}",
+                                        path, e
+                                    );
                                 }
                             }
                         }
@@ -129,7 +128,7 @@ pub fn start_reminder_scheduler(pool: SqlitePool, app_handle: tauri::AppHandle) 
                 FROM reminders r
                 JOIN entries e ON r.entry_id = e.id
                 WHERE r.status = 'Scheduled' AND r.trigger_at <= ?
-                "#
+                "#,
             )
             .bind(now.to_rfc3339())
             .fetch_all(&pool)
@@ -149,7 +148,8 @@ pub fn start_reminder_scheduler(pool: SqlitePool, app_handle: tauri::AppHandle) 
                         if result.rows_affected() == 1 {
                             // Send notification only if we won the race
                             use tauri_plugin_notification::NotificationExt;
-                            let _ = app_handle.notification()
+                            let _ = app_handle
+                                .notification()
                                 .builder()
                                 .title("ХРОНИКИ — Напоминание")
                                 .body(format!("Пора вернуться к истории: {}", title))

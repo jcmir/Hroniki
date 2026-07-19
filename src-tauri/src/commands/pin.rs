@@ -1,15 +1,16 @@
-use tauri::State;
 use crate::{app_state::AppState, application::security};
+use tauri::State;
 
 #[tauri::command]
 pub async fn is_pin_configured(state: State<'_, AppState>) -> Result<bool, String> {
     let service = state.service.lock().await;
     let pool = service.repository().pool();
 
-    let row: Option<(String,)> = sqlx::query_as("SELECT value FROM app_metadata WHERE key = 'pin_hash'")
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT value FROM app_metadata WHERE key = 'pin_hash'")
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| e.to_string())?;
 
     Ok(row.is_some())
 }
@@ -50,15 +51,17 @@ pub async fn verify_pin(pin: String, state: State<'_, AppState>) -> Result<bool,
     let service = state.service.lock().await;
     let pool = service.repository().pool();
 
-    let hash_row: Option<(String,)> = sqlx::query_as("SELECT value FROM app_metadata WHERE key = 'pin_hash'")
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    let hash_row: Option<(String,)> =
+        sqlx::query_as("SELECT value FROM app_metadata WHERE key = 'pin_hash'")
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| e.to_string())?;
 
-    let salt_row: Option<(String,)> = sqlx::query_as("SELECT value FROM app_metadata WHERE key = 'pin_salt'")
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    let salt_row: Option<(String,)> =
+        sqlx::query_as("SELECT value FROM app_metadata WHERE key = 'pin_salt'")
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| e.to_string())?;
 
     if let (Some((hash_hex,)), Some((salt_hex,))) = (hash_row, salt_row) {
         let salt_bytes = security::from_hex(&salt_hex)?;

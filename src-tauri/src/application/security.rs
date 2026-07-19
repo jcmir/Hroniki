@@ -1,11 +1,11 @@
-use pbkdf2::pbkdf2;
-use sha2::Sha256;
-use pbkdf2::hmac::Hmac;
-use rand::RngCore;
 use aes_gcm::{
     aead::{Aead, KeyInit},
-    Aes256Gcm, Nonce, Key
+    Aes256Gcm, Key, Nonce,
 };
+use pbkdf2::hmac::Hmac;
+use pbkdf2::pbkdf2;
+use rand::RngCore;
+use sha2::Sha256;
 
 pub fn generate_salt() -> Vec<u8> {
     let mut salt = vec![0u8; 16];
@@ -20,10 +20,7 @@ pub fn to_hex(bytes: &[u8]) -> String {
 pub fn from_hex(hex_str: &str) -> Result<Vec<u8>, String> {
     (0..hex_str.len())
         .step_by(2)
-        .map(|i| {
-            u8::from_str_radix(&hex_str[i..i + 2], 16)
-                .map_err(|e| e.to_string())
-        })
+        .map(|i| u8::from_str_radix(&hex_str[i..i + 2], 16).map_err(|e| e.to_string()))
         .collect()
 }
 
@@ -105,10 +102,10 @@ mod tests {
         let payload = b"Secret chronology backup data";
         let password = "MySecurePassword123";
         let mut encrypted = encrypt_data(payload, password).unwrap();
-        
+
         // Corrupt one byte of ciphertext (skip salt 16 bytes + nonce 12 bytes = 28)
         if encrypted.len() > 30 {
-            encrypted[30] ^= 0xFF; 
+            encrypted[30] ^= 0xFF;
         }
 
         let result = decrypt_data(&encrypted, password);

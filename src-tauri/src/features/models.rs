@@ -18,9 +18,7 @@ pub enum SubscriptionPlan {
 impl SubscriptionPlan {
     pub fn features(&self) -> Vec<Feature> {
         match self {
-            SubscriptionPlan::Free => vec![
-                Feature::ExportBackup,
-            ],
+            SubscriptionPlan::Free => vec![Feature::ExportBackup],
             SubscriptionPlan::Pro => vec![
                 Feature::ExportBackup,
                 Feature::UnlimitedObjects,
@@ -44,7 +42,7 @@ impl SubscriptionPlan {
         }
     }
 
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "pro" => SubscriptionPlan::Pro,
             "family" => SubscriptionPlan::Family,

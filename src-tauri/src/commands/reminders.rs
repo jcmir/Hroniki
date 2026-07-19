@@ -1,5 +1,5 @@
+use chrono::{DateTime, Duration, Utc};
 use tauri::State;
-use chrono::{DateTime, Utc, Duration};
 
 use crate::{app_state::AppState, domain::Reminder, storage::ChronologyRepository};
 
@@ -31,11 +31,13 @@ pub async fn create_reminder(
 }
 
 #[tauri::command]
-pub async fn get_reminders(
-    state: State<'_, AppState>,
-) -> Result<Vec<Reminder>, String> {
+pub async fn get_reminders(state: State<'_, AppState>) -> Result<Vec<Reminder>, String> {
     let service = state.service.lock().await;
-    service.repository().reminders().await.map_err(|e| e.to_string())
+    service
+        .repository()
+        .reminders()
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -49,7 +51,11 @@ pub async fn complete_reminder(
     let mut service = state.service.lock().await;
 
     // Find the reminder
-    let reminders = service.repository().reminders().await.map_err(|e| e.to_string())?;
+    let reminders = service
+        .repository()
+        .reminders()
+        .await
+        .map_err(|e| e.to_string())?;
     let mut reminder = reminders
         .into_iter()
         .find(|r| r.id == id)
@@ -91,7 +97,11 @@ pub async fn snooze_reminder(
     let mut service = state.service.lock().await;
 
     // Find the reminder
-    let reminders = service.repository().reminders().await.map_err(|e| e.to_string())?;
+    let reminders = service
+        .repository()
+        .reminders()
+        .await
+        .map_err(|e| e.to_string())?;
     let mut reminder = reminders
         .into_iter()
         .find(|r| r.id == id)

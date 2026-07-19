@@ -28,7 +28,11 @@ impl ChronologyRepository for MemoryChronologyRepository {
         Ok(())
     }
 
-    async fn save_entry_with_photos(&mut self, entry: Entry, photos: Vec<Photo>) -> Result<(), String> {
+    async fn save_entry_with_photos(
+        &mut self,
+        entry: Entry,
+        photos: Vec<Photo>,
+    ) -> Result<(), String> {
         self.entries.push(entry);
         self.photos.extend(photos);
         Ok(())
@@ -55,7 +59,12 @@ impl ChronologyRepository for MemoryChronologyRepository {
         Ok(())
     }
 
-    async fn update_entry(&mut self, id: EntryId, title: String, description: Option<String>) -> Result<(), String> {
+    async fn update_entry(
+        &mut self,
+        id: EntryId,
+        title: String,
+        description: Option<String>,
+    ) -> Result<(), String> {
         if let Some(entry) = self.entries.iter_mut().find(|e| e.id == id) {
             entry.title = title;
             entry.description = description;
@@ -77,7 +86,8 @@ impl ChronologyRepository for MemoryChronologyRepository {
     }
 
     async fn entry_photos(&self, entry_id: EntryId) -> Result<Vec<Photo>, String> {
-        let entry_photos = self.photos
+        let entry_photos = self
+            .photos
             .iter()
             .filter(|p| p.entry_id == entry_id)
             .cloned()
@@ -86,7 +96,8 @@ impl ChronologyRepository for MemoryChronologyRepository {
     }
 
     async fn entry_reminders(&self, entry_id: EntryId) -> Result<Vec<Reminder>, String> {
-        let entry_reminders = self.reminders
+        let entry_reminders = self
+            .reminders
             .iter()
             .filter(|r| r.entry_id == entry_id)
             .cloned()
@@ -104,7 +115,7 @@ impl ChronologyRepository for MemoryChronologyRepository {
         category_id: Option<String>,
         object_id: Option<String>,
         start_date: Option<String>,
-        end_date: Option<String>
+        end_date: Option<String>,
     ) -> Result<Vec<Entry>, String> {
         let mut results = self.entries.clone();
 
@@ -112,18 +123,22 @@ impl ChronologyRepository for MemoryChronologyRepository {
             let text_lower = text.to_lowercase();
             results.retain(|e| {
                 e.title.to_lowercase().contains(&text_lower)
-                    || e.description.as_ref().map(|d| d.to_lowercase().contains(&text_lower)).unwrap_or(false)
+                    || e.description
+                        .as_ref()
+                        .map(|d| d.to_lowercase().contains(&text_lower))
+                        .unwrap_or(false)
             });
         }
 
         if let Some(ref cat_id_str) = category_id {
             if let Ok(cat_uuid) = uuid::Uuid::parse_str(cat_id_str) {
                 let target_cat_id = crate::domain::CategoryId::from(cat_uuid);
-                let valid_object_ids: std::collections::HashSet<crate::domain::ChronicleObjectId> = self.objects
-                    .iter()
-                    .filter(|o| o.category_id == target_cat_id)
-                    .map(|o| o.id)
-                    .collect();
+                let valid_object_ids: std::collections::HashSet<crate::domain::ChronicleObjectId> =
+                    self.objects
+                        .iter()
+                        .filter(|o| o.category_id == target_cat_id)
+                        .map(|o| o.id)
+                        .collect();
                 results.retain(|e| valid_object_ids.contains(&e.object_id));
             }
         }
@@ -149,29 +164,43 @@ impl ChronologyRepository for MemoryChronologyRepository {
             }
         }
 
-        results.sort_by(|a, b| b.occurred_at.cmp(&a.occurred_at));
+        results.sort_by_key(|e| std::cmp::Reverse(e.occurred_at));
 
         Ok(results)
     }
 
-    async fn get_object_stats(&self, object_id: crate::domain::ChronicleObjectId) -> Result<ObjectStats, String> {
+    async fn get_object_stats(
+        &self,
+        object_id: crate::domain::ChronicleObjectId,
+    ) -> Result<ObjectStats, String> {
         let objects = self.objects.clone();
-        let object = objects.into_iter().find(|o| o.id == object_id)
+        let object = objects
+            .into_iter()
+            .find(|o| o.id == object_id)
             .ok_or_else(|| "Object not found".to_string())?;
 
-        let obj_entries: Vec<_> = self.entries.iter().filter(|e| e.object_id == object_id).cloned().collect();
+        let obj_entries: Vec<_> = self
+            .entries
+            .iter()
+            .filter(|e| e.object_id == object_id)
+            .cloned()
+            .collect();
         let age_days = (chrono::Utc::now() - object.created_at).num_days();
 
         let total_entries = obj_entries.len();
-        
+
         let mut total_photos = 0;
         for entry in &obj_entries {
-            let photos_count = self.photos.iter().filter(|p| p.entry_id == entry.id).count();
+            let photos_count = self
+                .photos
+                .iter()
+                .filter(|p| p.entry_id == entry.id)
+                .count();
             total_photos += photos_count;
         }
 
         let mut sorted_entries = obj_entries.clone();
-        sorted_entries.sort_by(|a, b| b.occurred_at.cmp(&a.occurred_at));
+        sorted_entries.sort_by_key(|e| std::cmp::Reverse(e.occurred_at));
 
         let last_event = sorted_entries.first();
         let last_event_title = last_event.map(|e| e.title.clone());
@@ -181,7 +210,12 @@ impl ChronologyRepository for MemoryChronologyRepository {
         let mut closest_trigger: Option<chrono::DateTime<chrono::Utc>> = None;
 
         for entry in &obj_entries {
-            let reminders: Vec<_> = self.reminders.iter().filter(|r| r.entry_id == entry.id).cloned().collect();
+            let reminders: Vec<_> = self
+                .reminders
+                .iter()
+                .filter(|r| r.entry_id == entry.id)
+                .cloned()
+                .collect();
             for reminder in reminders {
                 if reminder.status == "Scheduled" {
                     match closest_trigger {

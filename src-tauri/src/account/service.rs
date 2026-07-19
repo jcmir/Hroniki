@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use crate::identity::{
-    models::{User, Session},
-    error::IdentityError,
-};
 use super::provider::AccountProvider;
+use crate::identity::{
+    error::IdentityError,
+    models::{Session, User},
+};
 
 pub struct AccountService {
     provider: Arc<dyn AccountProvider>,
@@ -21,14 +21,12 @@ impl AccountService {
         display_name: Option<String>,
         password: &str,
     ) -> Result<User, IdentityError> {
-        self.provider.create_account(email, display_name, password).await
+        self.provider
+            .create_account(email, display_name, password)
+            .await
     }
 
-    pub async fn authenticate(
-        &self,
-        email: &str,
-        password: &str,
-    ) -> Result<User, IdentityError> {
+    pub async fn authenticate(&self, email: &str, password: &str) -> Result<User, IdentityError> {
         self.provider.authenticate(email, password).await
     }
 
@@ -40,10 +38,7 @@ impl AccountService {
         self.provider.create_session(user_id, device_name).await
     }
 
-    pub async fn close_session(
-        &self,
-        session_id: &str,
-    ) -> Result<(), IdentityError> {
+    pub async fn close_session(&self, session_id: &str) -> Result<(), IdentityError> {
         self.provider.invalidate_session(session_id).await
     }
 }
@@ -51,8 +46,8 @@ impl AccountService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::SqliteIdentityRepository;
     use crate::account::provider::LocalAccountProvider;
+    use crate::storage::SqliteIdentityRepository;
     use sqlx::SqlitePool;
     use uuid::Uuid;
 
@@ -60,8 +55,12 @@ mod tests {
         let temp_dir = std::env::temp_dir();
         let db_file = temp_dir.join(format!("hroniki_test_account_{}.sqlite", Uuid::new_v4()));
         let db_url = format!("sqlite://{}", db_file.to_string_lossy().replace('\\', "/"));
-        let pool = crate::storage::connection::create_pool(&db_url).await.unwrap();
-        crate::storage::migrations::run_migrations(&pool).await.unwrap();
+        let pool = crate::storage::connection::create_pool(&db_url)
+            .await
+            .unwrap();
+        crate::storage::migrations::run_migrations(&pool)
+            .await
+            .unwrap();
         pool
     }
 
@@ -77,24 +76,18 @@ mod tests {
         let password = "SuperSecretPassword123";
 
         // 1. Create account
-        let user = service.create_account(
-            Some(email.clone()),
-            Some("Jane Doe".into()),
-            password,
-        )
-        .await
-        .unwrap();
+        let user = service
+            .create_account(Some(email.clone()), Some("Jane Doe".into()), password)
+            .await
+            .unwrap();
 
         assert_eq!(user.email, Some(email.clone()));
         assert_eq!(user.display_name, Some("Jane Doe".into()));
 
         // 2. Reject duplicate email registration
-        let duplicate = service.create_account(
-            Some(email.clone()),
-            Some("Other".into()),
-            password,
-        )
-        .await;
+        let duplicate = service
+            .create_account(Some(email.clone()), Some("Other".into()), password)
+            .await;
         assert!(matches!(duplicate, Err(IdentityError::UserExists)));
 
         // 3. Authenticate with correct credentials
@@ -106,7 +99,10 @@ mod tests {
         assert!(matches!(bad_auth, Err(IdentityError::InvalidPassword)));
 
         // 5. Open and close session
-        let session = service.open_session(&user.id, Some("MacBook Pro".into())).await.unwrap();
+        let session = service
+            .open_session(&user.id, Some("MacBook Pro".into()))
+            .await
+            .unwrap();
         assert_eq!(session.user_id, user.id);
         assert_eq!(session.device_name, Some("MacBook Pro".into()));
 

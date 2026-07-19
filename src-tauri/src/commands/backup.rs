@@ -1,11 +1,11 @@
-use std::io::{Read, Write};
-use tauri::{State, Manager};
-use serde::{Serialize, Deserialize};
 use crate::{
     app_state::AppState,
-    application::{security, chronology::ChronologyService},
-    storage::{connection::create_pool, SqliteChronologyRepository, migrations::run_migrations},
+    application::{chronology::ChronologyService, security},
+    storage::{connection::create_pool, migrations::run_migrations, SqliteChronologyRepository},
 };
+use serde::{Deserialize, Serialize};
+use std::io::{Read, Write};
+use tauri::{Manager, State};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ArchiveManifest {
@@ -17,7 +17,11 @@ pub struct ArchiveManifest {
 }
 
 #[tauri::command]
-pub async fn export_archive(password: String, state: State<'_, AppState>, app: tauri::AppHandle) -> Result<String, String> {
+pub async fn export_archive(
+    password: String,
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<String, String> {
     if password.is_empty() {
         return Err("Password cannot be empty".to_string());
     }
@@ -45,10 +49,13 @@ pub async fn export_archive(password: String, state: State<'_, AppState>, app: t
     let service = state.service.lock().await;
     let pool = service.repository().pool();
 
-    sqlx::query(&format!("VACUUM INTO '{}'", temp_db_path.to_string_lossy().replace('\\', "/")))
-        .execute(pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    sqlx::query(&format!(
+        "VACUUM INTO '{}'",
+        temp_db_path.to_string_lossy().replace('\\', "/")
+    ))
+    .execute(pool)
+    .await
+    .map_err(|e| e.to_string())?;
 
     // 3. Create ZIP archive in memory
     let mut zip_buf = Vec::new();
@@ -59,7 +66,8 @@ pub async fn export_archive(password: String, state: State<'_, AppState>, app: t
             .unix_permissions(0o755);
 
         // Add chronology.sqlite to ZIP
-        zip.start_file("chronology.sqlite", options).map_err(|e| e.to_string())?;
+        zip.start_file("chronology.sqlite", options)
+            .map_err(|e| e.to_string())?;
         let db_bytes = std::fs::read(&temp_db_path).map_err(|e| e.to_string())?;
         zip.write_all(&db_bytes).map_err(|e| e.to_string())?;
 
@@ -72,8 +80,10 @@ pub async fn export_archive(password: String, state: State<'_, AppState>, app: t
             exported_at: chrono::Utc::now().to_rfc3339(),
         };
         let manifest_json = serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?;
-        zip.start_file("manifest.json", options).map_err(|e| e.to_string())?;
-        zip.write_all(manifest_json.as_bytes()).map_err(|e| e.to_string())?;
+        zip.start_file("manifest.json", options)
+            .map_err(|e| e.to_string())?;
+        zip.write_all(manifest_json.as_bytes())
+            .map_err(|e| e.to_string())?;
 
         // Add media files to ZIP
         let originals_dir = app_data_dir.join("media").join("originals");
@@ -84,7 +94,8 @@ pub async fn export_archive(password: String, state: State<'_, AppState>, app: t
                     if path.is_file() {
                         if let Some(filename_os) = path.file_name() {
                             let filename = filename_os.to_string_lossy();
-                            zip.start_file(format!("media/{}", filename), options).map_err(|e| e.to_string())?;
+                            zip.start_file(format!("media/{}", filename), options)
+                                .map_err(|e| e.to_string())?;
                             let file_bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
                             zip.write_all(&file_bytes).map_err(|e| e.to_string())?;
                         }
@@ -108,7 +119,11 @@ pub async fn export_archive(password: String, state: State<'_, AppState>, app: t
 }
 
 #[tauri::command]
-pub async fn import_archive(password: String, state: State<'_, AppState>, app: tauri::AppHandle) -> Result<(), String> {
+pub async fn import_archive(
+    password: String,
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
     if password.is_empty() {
         return Err("Password cannot be empty".to_string());
     }
@@ -142,7 +157,7 @@ pub async fn import_archive(password: String, state: State<'_, AppState>, app: t
     if let Ok(mut manifest_file) = archive.by_name("manifest.json") {
         let mut manifest_str = String::new();
         if manifest_file.read_to_string(&mut manifest_str).is_ok() {
-            if let Ok(parsed) = serde_json::from_str::<ArchiveManifest>(&mut manifest_str) {
+            if let Ok(parsed) = serde_json::from_str::<ArchiveManifest>(&manifest_str) {
                 manifest = Some(parsed);
             }
         }
@@ -158,7 +173,7 @@ pub async fn import_archive(password: String, state: State<'_, AppState>, app: t
             let restored_pool = create_pool(&db_url).await.map_err(|e| e.to_string())?;
             let repository = SqliteChronologyRepository::new(restored_pool);
             *service = ChronologyService::new(repository);
-            
+
             return Err(format!(
                 "Невозможно импортировать архив. Он был экспортирован из более новой версии приложения (версия схемы {}). Пожалуйста, обновите приложение ХРОНИКИ до актуальной версии.",
                 m.schema_version
@@ -186,7 +201,8 @@ pub async fn import_archive(password: String, state: State<'_, AppState>, app: t
             // Write media files
             if let Some(filename) = outpath.file_name() {
                 let dest_file_path = originals_dir.join(filename);
-                let mut outfile = std::fs::File::create(&dest_file_path).map_err(|e| e.to_string())?;
+                let mut outfile =
+                    std::fs::File::create(&dest_file_path).map_err(|e| e.to_string())?;
                 std::io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
             }
         }
@@ -195,7 +211,9 @@ pub async fn import_archive(password: String, state: State<'_, AppState>, app: t
     // 5. Reinitialize the database pool connection & run migrations
     let db_url = format!("sqlite://{}", db_path.to_string_lossy().replace('\\', "/"));
     let restored_pool = create_pool(&db_url).await.map_err(|e| e.to_string())?;
-    run_migrations(&restored_pool).await.map_err(|e| e.to_string())?;
+    run_migrations(&restored_pool)
+        .await
+        .map_err(|e| e.to_string())?;
 
     // Update the AppState service with the new pool connection
     let repository = SqliteChronologyRepository::new(restored_pool);
@@ -203,4 +221,3 @@ pub async fn import_archive(password: String, state: State<'_, AppState>, app: t
 
     Ok(())
 }
-

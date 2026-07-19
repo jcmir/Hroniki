@@ -1,12 +1,15 @@
 use async_trait::async_trait;
 
-use super::models::{User, Session};
 use super::error::IdentityError;
+use super::models::{Session, User};
 
 #[async_trait]
 pub trait IdentityRepository: Send + Sync {
     async fn find_by_email(&self, email: &str) -> Result<Option<User>, IdentityError>;
-    async fn find_user_with_hash(&self, email: &str) -> Result<Option<(User, String)>, IdentityError>;
+    async fn find_user_with_hash(
+        &self,
+        email: &str,
+    ) -> Result<Option<(User, String)>, IdentityError>;
     async fn create_user(&self, user: User, password_hash: String) -> Result<(), IdentityError>;
 
     // Session operations

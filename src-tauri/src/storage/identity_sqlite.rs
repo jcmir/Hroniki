@@ -3,9 +3,9 @@ use chrono::Utc;
 use sqlx::{Row, SqlitePool};
 
 use crate::identity::{
-    models::{User, Session},
-    repository::IdentityRepository,
     error::IdentityError,
+    models::{Session, User},
+    repository::IdentityRepository,
 };
 
 pub struct SqliteIdentityRepository {
@@ -20,10 +20,7 @@ impl SqliteIdentityRepository {
 
 #[async_trait]
 impl IdentityRepository for SqliteIdentityRepository {
-    async fn find_by_email(
-        &self,
-        email: &str,
-    ) -> Result<Option<User>, IdentityError> {
+    async fn find_by_email(&self, email: &str) -> Result<Option<User>, IdentityError> {
         let row = sqlx::query(
             r#"
             SELECT
@@ -41,12 +38,21 @@ impl IdentityRepository for SqliteIdentityRepository {
         .map_err(|e| IdentityError::Storage(e.to_string()))?;
 
         if let Some(r) = row {
-            let id: String = r.try_get("id").map_err(|e| IdentityError::Storage(e.to_string()))?;
-            let email: Option<String> = r.try_get("email").map_err(|e| IdentityError::Storage(e.to_string()))?;
-            let display_name: Option<String> = r.try_get("display_name").map_err(|e| IdentityError::Storage(e.to_string()))?;
-            let created_at_str: String = r.try_get("created_at").map_err(|e| IdentityError::Storage(e.to_string()))?;
-            
-            let created_at = created_at_str.parse()
+            let id: String = r
+                .try_get("id")
+                .map_err(|e| IdentityError::Storage(e.to_string()))?;
+            let email: Option<String> = r
+                .try_get("email")
+                .map_err(|e| IdentityError::Storage(e.to_string()))?;
+            let display_name: Option<String> = r
+                .try_get("display_name")
+                .map_err(|e| IdentityError::Storage(e.to_string()))?;
+            let created_at_str: String = r
+                .try_get("created_at")
+                .map_err(|e| IdentityError::Storage(e.to_string()))?;
+
+            let created_at = created_at_str
+                .parse()
                 .map_err(|e| IdentityError::Storage(format!("Invalid date format: {}", e)))?;
 
             Ok(Some(User {
@@ -82,13 +88,24 @@ impl IdentityRepository for SqliteIdentityRepository {
         .map_err(|e| IdentityError::Storage(e.to_string()))?;
 
         if let Some(r) = row {
-            let id: String = r.try_get("id").map_err(|e| IdentityError::Storage(e.to_string()))?;
-            let email: Option<String> = r.try_get("email").map_err(|e| IdentityError::Storage(e.to_string()))?;
-            let display_name: Option<String> = r.try_get("display_name").map_err(|e| IdentityError::Storage(e.to_string()))?;
-            let password_hash: String = r.try_get("password_hash").map_err(|e| IdentityError::Storage(e.to_string()))?;
-            let created_at_str: String = r.try_get("created_at").map_err(|e| IdentityError::Storage(e.to_string()))?;
-            
-            let created_at = created_at_str.parse()
+            let id: String = r
+                .try_get("id")
+                .map_err(|e| IdentityError::Storage(e.to_string()))?;
+            let email: Option<String> = r
+                .try_get("email")
+                .map_err(|e| IdentityError::Storage(e.to_string()))?;
+            let display_name: Option<String> = r
+                .try_get("display_name")
+                .map_err(|e| IdentityError::Storage(e.to_string()))?;
+            let password_hash: String = r
+                .try_get("password_hash")
+                .map_err(|e| IdentityError::Storage(e.to_string()))?;
+            let created_at_str: String = r
+                .try_get("created_at")
+                .map_err(|e| IdentityError::Storage(e.to_string()))?;
+
+            let created_at = created_at_str
+                .parse()
                 .map_err(|e| IdentityError::Storage(format!("Invalid date format: {}", e)))?;
 
             Ok(Some((
@@ -105,11 +122,7 @@ impl IdentityRepository for SqliteIdentityRepository {
         }
     }
 
-    async fn create_user(
-        &self,
-        user: User,
-        password_hash: String,
-    ) -> Result<(), IdentityError> {
+    async fn create_user(&self, user: User, password_hash: String) -> Result<(), IdentityError> {
         sqlx::query(
             r#"
             INSERT INTO users
@@ -183,12 +196,21 @@ impl IdentityRepository for SqliteIdentityRepository {
         .map_err(|e| IdentityError::Storage(e.to_string()))?;
 
         if let Some(r) = row {
-            let id: String = r.try_get("id").map_err(|e| IdentityError::Storage(e.to_string()))?;
-            let user_id: String = r.try_get("user_id").map_err(|e| IdentityError::Storage(e.to_string()))?;
-            let device_name: Option<String> = r.try_get("device_name").map_err(|e| IdentityError::Storage(e.to_string()))?;
-            let created_at_str: String = r.try_get("created_at").map_err(|e| IdentityError::Storage(e.to_string()))?;
-            
-            let created_at = created_at_str.parse()
+            let id: String = r
+                .try_get("id")
+                .map_err(|e| IdentityError::Storage(e.to_string()))?;
+            let user_id: String = r
+                .try_get("user_id")
+                .map_err(|e| IdentityError::Storage(e.to_string()))?;
+            let device_name: Option<String> = r
+                .try_get("device_name")
+                .map_err(|e| IdentityError::Storage(e.to_string()))?;
+            let created_at_str: String = r
+                .try_get("created_at")
+                .map_err(|e| IdentityError::Storage(e.to_string()))?;
+
+            let created_at = created_at_str
+                .parse()
                 .map_err(|e| IdentityError::Storage(format!("Invalid date format: {}", e)))?;
 
             Ok(Some(Session {
@@ -220,7 +242,10 @@ impl IdentityRepository for SqliteIdentityRepository {
 
 #[async_trait]
 impl crate::features::repository::SubscriptionRepository for SqliteIdentityRepository {
-    async fn get_user_plan(&self, user_id: &str) -> Result<crate::features::models::SubscriptionPlan, IdentityError> {
+    async fn get_user_plan(
+        &self,
+        user_id: &str,
+    ) -> Result<crate::features::models::SubscriptionPlan, IdentityError> {
         let row = sqlx::query(
             r#"
             SELECT plan
@@ -234,14 +259,22 @@ impl crate::features::repository::SubscriptionRepository for SqliteIdentityRepos
         .map_err(|e| IdentityError::Storage(e.to_string()))?;
 
         if let Some(r) = row {
-            let plan_str: String = r.try_get("plan").map_err(|e| IdentityError::Storage(e.to_string()))?;
-            Ok(crate::features::models::SubscriptionPlan::from_str(&plan_str))
+            let plan_str: String = r
+                .try_get("plan")
+                .map_err(|e| IdentityError::Storage(e.to_string()))?;
+            Ok(crate::features::models::SubscriptionPlan::parse(
+                &plan_str,
+            ))
         } else {
             Ok(crate::features::models::SubscriptionPlan::Free)
         }
     }
 
-    async fn set_user_plan(&self, user_id: &str, plan: crate::features::models::SubscriptionPlan) -> Result<(), IdentityError> {
+    async fn set_user_plan(
+        &self,
+        user_id: &str,
+        plan: crate::features::models::SubscriptionPlan,
+    ) -> Result<(), IdentityError> {
         sqlx::query(
             r#"
             INSERT INTO subscriptions
@@ -272,7 +305,10 @@ impl crate::features::repository::SubscriptionRepository for SqliteIdentityRepos
 
 #[async_trait]
 impl crate::audit::repository::AuditRepository for SqliteIdentityRepository {
-    async fn record_log(&self, entry: crate::audit::models::AuditLogEntry) -> Result<(), IdentityError> {
+    async fn record_log(
+        &self,
+        entry: crate::audit::models::AuditLogEntry,
+    ) -> Result<(), IdentityError> {
         sqlx::query(
             r#"
             INSERT INTO audit_logs (id, user_id, event_type, details, created_at)
@@ -291,7 +327,10 @@ impl crate::audit::repository::AuditRepository for SqliteIdentityRepository {
         Ok(())
     }
 
-    async fn fetch_logs(&self, user_id: Option<&str>) -> Result<Vec<crate::audit::models::AuditLogEntry>, IdentityError> {
+    async fn fetch_logs(
+        &self,
+        user_id: Option<&str>,
+    ) -> Result<Vec<crate::audit::models::AuditLogEntry>, IdentityError> {
         let rows = if let Some(uid) = user_id {
             sqlx::query(
                 r#"
@@ -320,12 +359,23 @@ impl crate::audit::repository::AuditRepository for SqliteIdentityRepository {
 
         let mut entries = Vec::new();
         for r in rows {
-            let id: String = r.try_get("id").map_err(|e| IdentityError::Storage(e.to_string()))?;
-            let user_id: Option<String> = r.try_get("user_id").map_err(|e| IdentityError::Storage(e.to_string()))?;
-            let event_type: String = r.try_get("event_type").map_err(|e| IdentityError::Storage(e.to_string()))?;
-            let details: Option<String> = r.try_get("details").map_err(|e| IdentityError::Storage(e.to_string()))?;
-            let created_at_str: String = r.try_get("created_at").map_err(|e| IdentityError::Storage(e.to_string()))?;
-            let created_at = created_at_str.parse()
+            let id: String = r
+                .try_get("id")
+                .map_err(|e| IdentityError::Storage(e.to_string()))?;
+            let user_id: Option<String> = r
+                .try_get("user_id")
+                .map_err(|e| IdentityError::Storage(e.to_string()))?;
+            let event_type: String = r
+                .try_get("event_type")
+                .map_err(|e| IdentityError::Storage(e.to_string()))?;
+            let details: Option<String> = r
+                .try_get("details")
+                .map_err(|e| IdentityError::Storage(e.to_string()))?;
+            let created_at_str: String = r
+                .try_get("created_at")
+                .map_err(|e| IdentityError::Storage(e.to_string()))?;
+            let created_at = created_at_str
+                .parse()
                 .map_err(|e| IdentityError::Storage(format!("Invalid date format: {}", e)))?;
 
             entries.push(crate::audit::models::AuditLogEntry {
@@ -341,8 +391,6 @@ impl crate::audit::repository::AuditRepository for SqliteIdentityRepository {
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -352,8 +400,12 @@ mod tests {
         let temp_dir = std::env::temp_dir();
         let db_file = temp_dir.join(format!("hroniki_test_identity_{}.sqlite", Uuid::new_v4()));
         let db_url = format!("sqlite://{}", db_file.to_string_lossy().replace('\\', "/"));
-        let pool = crate::storage::connection::create_pool(&db_url).await.unwrap();
-        crate::storage::migrations::run_migrations(&pool).await.unwrap();
+        let pool = crate::storage::connection::create_pool(&db_url)
+            .await
+            .unwrap();
+        crate::storage::migrations::run_migrations(&pool)
+            .await
+            .unwrap();
         pool
     }
 
@@ -370,28 +422,20 @@ mod tests {
             created_at: Utc::now(),
         };
 
-        repo.create_user(user.clone(), "hash".into())
-            .await
-            .unwrap();
+        repo.create_user(user.clone(), "hash".into()).await.unwrap();
 
         // Test basic find by email
-        let loaded = repo.find_by_email(&email)
-            .await
-            .unwrap()
-            .unwrap();
+        let loaded = repo.find_by_email(&email).await.unwrap().unwrap();
 
         assert_eq!(loaded.id, user.id);
         assert_eq!(loaded.email, user.email);
 
         // Test find user with hash
-        let (user_loaded, hash) = repo.find_user_with_hash(&email)
-            .await
-            .unwrap()
-            .unwrap();
+        let (user_loaded, hash) = repo.find_user_with_hash(&email).await.unwrap().unwrap();
 
         assert_eq!(user_loaded.id, user.id);
         assert_eq!(hash, "hash");
-        
+
         // Clean up pool/file
         pool.close().await;
     }

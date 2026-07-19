@@ -1,25 +1,25 @@
+pub mod account;
 pub mod app_state;
 pub mod application;
+pub mod audit;
 pub mod commands;
 pub mod domain;
-pub mod storage;
-pub mod identity;
-pub mod security;
-pub mod account;
-pub mod features;
 pub mod events;
-pub mod audit;
+pub mod features;
+pub mod identity;
+pub mod search;
+pub mod security;
+pub mod storage;
 
-
-
-use std::sync::Arc;
-use tauri::Manager;
-use tokio::sync::Mutex;
 use crate::{
     app_state::AppState,
     application::chronology::ChronologyService,
+    search::{SearchService, SearchSubscriber, SqliteSearchRepository},
     storage::{connection::create_pool, SqliteChronologyRepository},
 };
+use std::sync::Arc;
+use tauri::Manager;
+use tokio::sync::Mutex;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -28,17 +28,23 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let app_handle = app.handle().clone();
-            let app_data_dir = app.path().app_data_dir().expect("failed to get app data dir");
-            
+            let app_data_dir = app
+                .path()
+                .app_data_dir()
+                .expect("failed to get app data dir");
+
             let database_dir = app_data_dir.join("database");
             let media_originals_dir = app_data_dir.join("media").join("originals");
             let media_staging_dir = app_data_dir.join("media").join("staging");
             let media_thumbnails_dir = app_data_dir.join("media").join("thumbnails");
 
             std::fs::create_dir_all(&database_dir).expect("failed to create database dir");
-            std::fs::create_dir_all(&media_originals_dir).expect("failed to create media originals dir");
-            std::fs::create_dir_all(&media_staging_dir).expect("failed to create media staging dir");
-            std::fs::create_dir_all(&media_thumbnails_dir).expect("failed to create media thumbnails dir");
+            std::fs::create_dir_all(&media_originals_dir)
+                .expect("failed to create media originals dir");
+            std::fs::create_dir_all(&media_staging_dir)
+                .expect("failed to create media staging dir");
+            std::fs::create_dir_all(&media_thumbnails_dir)
+                .expect("failed to create media thumbnails dir");
 
             let db_path = database_dir.join("chronology.sqlite");
             if !db_path.exists() {
@@ -47,28 +53,49 @@ pub fn run() {
             let db_url = format!("sqlite://{}", db_path.to_string_lossy().replace('\\', "/"));
 
             tauri::async_runtime::block_on(async move {
-                let pool = create_pool(&db_url).await.expect("failed to create db pool");
+                let pool = create_pool(&db_url)
+                    .await
+                    .expect("failed to create db pool");
 
                 let repository = SqliteChronologyRepository::new(pool.clone());
                 let mut service = ChronologyService::new(repository);
 
-                crate::application::bootstrap::initialize_application(&mut service, &pool, &app_handle)
-                    .await
-                    .expect("failed to initialize application");
+                crate::application::bootstrap::initialize_application(
+                    &mut service,
+                    &pool,
+                    &app_handle,
+                )
+                .await
+                .expect("failed to initialize application");
 
-                crate::application::bootstrap::start_reminder_scheduler(pool.clone(), app_handle.clone());
+                crate::application::bootstrap::start_reminder_scheduler(
+                    pool.clone(),
+                    app_handle.clone(),
+                );
 
                 let event_bus = Arc::new(crate::events::EventBus::new());
 
                 // Initialize and start Audit Log Subscriber
-                let audit_repo = Arc::new(crate::storage::SqliteIdentityRepository::new(pool.clone()));
+                let audit_repo =
+                    Arc::new(crate::storage::SqliteIdentityRepository::new(pool.clone()));
                 let audit_service = Arc::new(crate::audit::service::AuditService::new(audit_repo));
-                let audit_subscriber = crate::audit::subscriber::AuditSubscriber::new(event_bus.clone(), audit_service);
+                let audit_subscriber = crate::audit::subscriber::AuditSubscriber::new(
+                    event_bus.clone(),
+                    audit_service,
+                );
                 audit_subscriber.start();
+
+                // Initialize Search Service and Subscriber
+                let search_repo = Arc::new(SqliteSearchRepository::new(pool.clone()));
+                let search_service = Arc::new(SearchService::new(search_repo));
+                let search_subscriber =
+                    SearchSubscriber::new(event_bus.clone(), search_service.clone(), pool.clone());
+                search_subscriber.start();
 
                 app.manage(AppState {
                     service: Arc::new(Mutex::new(service)),
                     event_bus,
+                    search_service,
                 });
             });
 
@@ -104,6 +131,7 @@ pub fn run() {
             commands::onboarding::complete_onboarding,
             commands::onboarding::seed_demo_data,
             commands::onboarding::get_username,
+            commands::search::fts_search,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -94,11 +94,7 @@ pub struct Photo {
 }
 
 impl Photo {
-    pub fn new(
-        entry_id: EntryId,
-        path: impl Into<String>,
-        thumbnail: impl Into<String>,
-    ) -> Self {
+    pub fn new(entry_id: EntryId, path: impl Into<String>, thumbnail: impl Into<String>) -> Self {
         Self {
             id: PhotoId::new(),
             entry_id,
@@ -120,11 +116,7 @@ pub struct Reminder {
 }
 
 impl Reminder {
-    pub fn new(
-        entry_id: EntryId,
-        trigger_at: DateTime<Utc>,
-        repeat_days: Option<i32>,
-    ) -> Self {
+    pub fn new(entry_id: EntryId, trigger_at: DateTime<Utc>, repeat_days: Option<i32>) -> Self {
         Self {
             id: ReminderId::new(),
             entry_id,
@@ -135,7 +127,6 @@ impl Reminder {
         }
     }
 }
-
 
 fn validate_required_text(value: String, field: &'static str) -> Result<String, DomainError> {
     let value = value.trim();

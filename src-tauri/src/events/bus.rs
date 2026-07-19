@@ -1,5 +1,5 @@
-use tokio::sync::broadcast;
 use super::event::DomainEvent;
+use tokio::sync::broadcast;
 
 pub struct EventBus {
     sender: broadcast::Sender<DomainEvent>,
@@ -17,6 +17,12 @@ impl EventBus {
 
     pub fn subscribe(&self) -> broadcast::Receiver<DomainEvent> {
         self.sender.subscribe()
+    }
+}
+
+impl Default for EventBus {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

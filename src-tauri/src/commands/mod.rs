@@ -1,8 +1,9 @@
+pub mod backup;
 pub mod categories;
-pub mod objects;
 pub mod entries;
 pub mod media;
-pub mod reminders;
-pub mod pin;
-pub mod backup;
+pub mod objects;
 pub mod onboarding;
+pub mod pin;
+pub mod reminders;
+pub mod search;

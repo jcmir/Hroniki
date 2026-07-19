@@ -1,12 +1,12 @@
 use async_trait::async_trait;
+use chrono::Utc;
 use std::sync::Arc;
 use uuid::Uuid;
-use chrono::Utc;
 
 use crate::identity::{
-    models::{User, Session},
-    repository::IdentityRepository,
     error::IdentityError,
+    models::{Session, User},
+    repository::IdentityRepository,
 };
 
 #[async_trait]
@@ -18,11 +18,7 @@ pub trait AccountProvider: Send + Sync {
         password: &str,
     ) -> Result<User, IdentityError>;
 
-    async fn authenticate(
-        &self,
-        email: &str,
-        password: &str,
-    ) -> Result<User, IdentityError>;
+    async fn authenticate(&self, email: &str, password: &str) -> Result<User, IdentityError>;
 
     async fn create_session(
         &self,
@@ -30,10 +26,7 @@ pub trait AccountProvider: Send + Sync {
         device_name: Option<String>,
     ) -> Result<Session, IdentityError>;
 
-    async fn invalidate_session(
-        &self,
-        session_id: &str,
-    ) -> Result<(), IdentityError>;
+    async fn invalidate_session(&self, session_id: &str) -> Result<(), IdentityError>;
 }
 
 pub struct LocalAccountProvider {
@@ -42,8 +35,14 @@ pub struct LocalAccountProvider {
 }
 
 impl LocalAccountProvider {
-    pub fn new(repository: Arc<dyn IdentityRepository>, event_bus: Arc<crate::events::EventBus>) -> Self {
-        Self { repository, event_bus }
+    pub fn new(
+        repository: Arc<dyn IdentityRepository>,
+        event_bus: Arc<crate::events::EventBus>,
+    ) -> Self {
+        Self {
+            repository,
+            event_bus,
+        }
     }
 }
 
@@ -63,7 +62,7 @@ impl AccountProvider for LocalAccountProvider {
 
         let user_id = Uuid::new_v4().to_string();
         let password_hash = crate::security::password::hash_password(password)
-            .map_err(|e| IdentityError::Crypto(e))?;
+            .map_err(IdentityError::Crypto)?;
 
         let user = User {
             id: user_id,
@@ -72,44 +71,45 @@ impl AccountProvider for LocalAccountProvider {
             created_at: Utc::now(),
         };
 
-        self.repository.create_user(user.clone(), password_hash).await?;
+        self.repository
+            .create_user(user.clone(), password_hash)
+            .await?;
 
         // Publish registration event
-        self.event_bus.publish(crate::events::DomainEvent::UserRegistered {
-            user_id: user.id.clone(),
-            email: user.email.clone(),
-        });
+        self.event_bus
+            .publish(crate::events::DomainEvent::UserRegistered {
+                user_id: user.id.clone(),
+                email: user.email.clone(),
+            });
 
         Ok(user)
     }
 
-    async fn authenticate(
-        &self,
-        email: &str,
-        password: &str,
-    ) -> Result<User, IdentityError> {
+    async fn authenticate(&self, email: &str, password: &str) -> Result<User, IdentityError> {
         let (user, password_hash) = match self.repository.find_user_with_hash(email).await? {
             Some(res) => res,
             None => return Err(IdentityError::UserNotFound),
         };
 
         let is_valid = crate::security::password::verify_password(password, &password_hash)
-            .map_err(|e| IdentityError::Crypto(e))?;
+            .map_err(IdentityError::Crypto)?;
 
         if !is_valid {
             // Publish authentication failure event
-            self.event_bus.publish(crate::events::DomainEvent::UserAuthenticated {
-                user_id: user.id.clone(),
-                success: false,
-            });
+            self.event_bus
+                .publish(crate::events::DomainEvent::UserAuthenticated {
+                    user_id: user.id.clone(),
+                    success: false,
+                });
             return Err(IdentityError::InvalidPassword);
         }
 
         // Publish authentication success event
-        self.event_bus.publish(crate::events::DomainEvent::UserAuthenticated {
-            user_id: user.id.clone(),
-            success: true,
-        });
+        self.event_bus
+            .publish(crate::events::DomainEvent::UserAuthenticated {
+                user_id: user.id.clone(),
+                success: true,
+            });
 
         Ok(user)
     }
@@ -129,27 +129,25 @@ impl AccountProvider for LocalAccountProvider {
         self.repository.create_session(session.clone()).await?;
 
         // Publish session opened event
-        self.event_bus.publish(crate::events::DomainEvent::SessionOpened {
-            session_id: session.id.clone(),
-            user_id: session.user_id.clone(),
-            device_name: session.device_name.clone(),
-        });
+        self.event_bus
+            .publish(crate::events::DomainEvent::SessionOpened {
+                session_id: session.id.clone(),
+                user_id: session.user_id.clone(),
+                device_name: session.device_name.clone(),
+            });
 
         Ok(session)
     }
 
-    async fn invalidate_session(
-        &self,
-        session_id: &str,
-    ) -> Result<(), IdentityError> {
+    async fn invalidate_session(&self, session_id: &str) -> Result<(), IdentityError> {
         self.repository.delete_session(session_id).await?;
 
         // Publish session closed event
-        self.event_bus.publish(crate::events::DomainEvent::SessionClosed {
-            session_id: session_id.to_string(),
-        });
+        self.event_bus
+            .publish(crate::events::DomainEvent::SessionClosed {
+                session_id: session_id.to_string(),
+            });
 
         Ok(())
     }
 }
-

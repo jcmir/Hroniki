@@ -1,7 +1,10 @@
 use chrono::{DateTime, Utc};
 use sqlx::{Row, SqlitePool};
 
-use crate::domain::{Category, CategoryId, ChronicleObject, ChronicleObjectId, Entry, EntryId, Photo, PhotoId, Reminder, ReminderId};
+use crate::domain::{
+    Category, CategoryId, ChronicleObject, ChronicleObjectId, Entry, EntryId, Photo, PhotoId,
+    Reminder, ReminderId,
+};
 
 use super::{ChronologyRepository, ObjectStats};
 
@@ -120,7 +123,11 @@ impl ChronologyRepository for SqliteChronologyRepository {
         Ok(())
     }
 
-    async fn save_entry_with_photos(&mut self, entry: Entry, photos: Vec<Photo>) -> Result<(), String> {
+    async fn save_entry_with_photos(
+        &mut self,
+        entry: Entry,
+        photos: Vec<Photo>,
+    ) -> Result<(), String> {
         let mut tx = self.pool.begin().await.map_err(|e| e.to_string())?;
 
         sqlx::query(
@@ -419,7 +426,12 @@ impl ChronologyRepository for SqliteChronologyRepository {
         Ok(())
     }
 
-    async fn update_entry(&mut self, id: EntryId, title: String, description: Option<String>) -> Result<(), String> {
+    async fn update_entry(
+        &mut self,
+        id: EntryId,
+        title: String,
+        description: Option<String>,
+    ) -> Result<(), String> {
         sqlx::query(
             r#"
             UPDATE entries
@@ -509,12 +521,15 @@ impl ChronologyRepository for SqliteChronologyRepository {
             let trigger_at: String = row.try_get("trigger_at").map_err(|e| e.to_string())?;
             let status: String = row.try_get("status").map_err(|e| e.to_string())?;
             let repeat_days: Option<i32> = row.try_get("repeat_days").map_err(|e| e.to_string())?;
-            let completed_at_str: Option<String> = row.try_get("completed_at").map_err(|e| e.to_string())?;
+            let completed_at_str: Option<String> =
+                row.try_get("completed_at").map_err(|e| e.to_string())?;
 
             let completed_at = match completed_at_str {
-                Some(s) => Some(DateTime::parse_from_rfc3339(&s)
-                    .map_err(|e| e.to_string())?
-                    .with_timezone(&Utc)),
+                Some(s) => Some(
+                    DateTime::parse_from_rfc3339(&s)
+                        .map_err(|e| e.to_string())?
+                        .with_timezone(&Utc),
+                ),
                 None => None,
             };
 
@@ -561,12 +576,15 @@ impl ChronologyRepository for SqliteChronologyRepository {
             let trigger_at: String = row.try_get("trigger_at").map_err(|e| e.to_string())?;
             let status: String = row.try_get("status").map_err(|e| e.to_string())?;
             let repeat_days: Option<i32> = row.try_get("repeat_days").map_err(|e| e.to_string())?;
-            let completed_at_str: Option<String> = row.try_get("completed_at").map_err(|e| e.to_string())?;
+            let completed_at_str: Option<String> =
+                row.try_get("completed_at").map_err(|e| e.to_string())?;
 
             let completed_at = match completed_at_str {
-                Some(s) => Some(DateTime::parse_from_rfc3339(&s)
-                    .map_err(|e| e.to_string())?
-                    .with_timezone(&Utc)),
+                Some(s) => Some(
+                    DateTime::parse_from_rfc3339(&s)
+                        .map_err(|e| e.to_string())?
+                        .with_timezone(&Utc),
+                ),
                 None => None,
             };
 
@@ -593,10 +611,10 @@ impl ChronologyRepository for SqliteChronologyRepository {
         category_id: Option<String>,
         object_id: Option<String>,
         start_date: Option<String>,
-        end_date: Option<String>
+        end_date: Option<String>,
     ) -> Result<Vec<Entry>, String> {
         let text_filter = query_text.map(|q| format!("%{}%", q));
-        
+
         let rows = sqlx::query(
             r#"
             SELECT
@@ -633,7 +651,8 @@ impl ChronologyRepository for SqliteChronologyRepository {
             let object_id_str: String = row.try_get("object_id").map_err(|e| e.to_string())?;
             let occurred_at: String = row.try_get("occurred_at").map_err(|e| e.to_string())?;
             let title: String = row.try_get("title").map_err(|e| e.to_string())?;
-            let description: Option<String> = row.try_get("description").map_err(|e| e.to_string())?;
+            let description: Option<String> =
+                row.try_get("description").map_err(|e| e.to_string())?;
             let created_at: String = row.try_get("created_at").map_err(|e| e.to_string())?;
             let updated_at: String = row.try_get("updated_at").map_err(|e| e.to_string())?;
 
@@ -659,7 +678,10 @@ impl ChronologyRepository for SqliteChronologyRepository {
         Ok(result)
     }
 
-    async fn get_object_stats(&self, object_id: crate::domain::ChronicleObjectId) -> Result<ObjectStats, String> {
+    async fn get_object_stats(
+        &self,
+        object_id: crate::domain::ChronicleObjectId,
+    ) -> Result<ObjectStats, String> {
         let object_id_str = object_id.value().to_string();
 
         let row = sqlx::query(
@@ -683,9 +705,13 @@ impl ChronologyRepository for SqliteChronologyRepository {
         let created_at_str: String = row.try_get("created_at").map_err(|e| e.to_string())?;
         let total_entries: i64 = row.try_get("total_entries").map_err(|e| e.to_string())?;
         let total_photos: i64 = row.try_get("total_photos").map_err(|e| e.to_string())?;
-        let last_event_title: Option<String> = row.try_get("last_event_title").map_err(|e| e.to_string())?;
-        let last_event_date: Option<String> = row.try_get("last_event_date").map_err(|e| e.to_string())?;
-        let next_reminder_date: Option<String> = row.try_get("next_reminder_date").map_err(|e| e.to_string())?;
+        let last_event_title: Option<String> =
+            row.try_get("last_event_title").map_err(|e| e.to_string())?;
+        let last_event_date: Option<String> =
+            row.try_get("last_event_date").map_err(|e| e.to_string())?;
+        let next_reminder_date: Option<String> = row
+            .try_get("next_reminder_date")
+            .map_err(|e| e.to_string())?;
 
         let created_at = DateTime::parse_from_rfc3339(&created_at_str)
             .map_err(|e| e.to_string())?
@@ -863,7 +889,10 @@ mod tests {
         let result = repository.save_object(object).await;
         assert!(result.is_err());
         let err_msg = result.unwrap_err();
-        assert!(err_msg.contains("FOREIGN KEY constraint failed") || err_msg.contains("foreign key constraint failed"));
+        assert!(
+            err_msg.contains("FOREIGN KEY constraint failed")
+                || err_msg.contains("foreign key constraint failed")
+        );
     }
 
     #[tokio::test]
@@ -885,7 +914,9 @@ mod tests {
         let invalid_photo = Photo::new(invalid_entry_id, "ghost.jpg", "ghost.jpg");
 
         // Try to save both - this should fail since the photo has an invalid entry id
-        let result = repository.save_entry_with_photos(entry.clone(), vec![invalid_photo]).await;
+        let result = repository
+            .save_entry_with_photos(entry.clone(), vec![invalid_photo])
+            .await;
         assert!(result.is_err());
 
         // Verify that the entry WAS NOT saved (transaction rolled back)
@@ -919,20 +950,24 @@ mod tests {
         assert_eq!(target.status, "Scheduled");
 
         // Try to claim it
-        let update_res = sqlx::query("UPDATE reminders SET status = 'Triggered' WHERE id = ? AND status = 'Scheduled'")
-            .bind(target.id.value().to_string())
-            .execute(&pool)
-            .await
-            .unwrap();
+        let update_res = sqlx::query(
+            "UPDATE reminders SET status = 'Triggered' WHERE id = ? AND status = 'Scheduled'",
+        )
+        .bind(target.id.value().to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
 
         assert_eq!(update_res.rows_affected(), 1);
 
         // Try to claim it again (should affect 0 rows)
-        let update_res_again = sqlx::query("UPDATE reminders SET status = 'Triggered' WHERE id = ? AND status = 'Scheduled'")
-            .bind(target.id.value().to_string())
-            .execute(&pool)
-            .await
-            .unwrap();
+        let update_res_again = sqlx::query(
+            "UPDATE reminders SET status = 'Triggered' WHERE id = ? AND status = 'Scheduled'",
+        )
+        .bind(target.id.value().to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
 
         assert_eq!(update_res_again.rows_affected(), 0);
     }
@@ -949,19 +984,31 @@ mod tests {
         let object = ChronicleObject::new(category.id, "Apple tree", None).unwrap();
         repository.save_object(object.clone()).await.unwrap();
 
-        let entry1 = Entry::new(object.id, Utc::now() - chrono::Duration::days(2), "Sprayed fungicide", Some("Detailed info about spray".to_string())).unwrap();
+        let entry1 = Entry::new(
+            object.id,
+            Utc::now() - chrono::Duration::days(2),
+            "Sprayed fungicide",
+            Some("Detailed info about spray".to_string()),
+        )
+        .unwrap();
         let entry2 = Entry::new(object.id, Utc::now(), "Watered the tree", None).unwrap();
 
         repository.save_entry(entry1.clone()).await.unwrap();
         repository.save_entry(entry2.clone()).await.unwrap();
 
         // 1. Search by text (should match entry1)
-        let results = repository.search_entries(Some("spray".to_string()), None, None, None, None).await.unwrap();
+        let results = repository
+            .search_entries(Some("spray".to_string()), None, None, None, None)
+            .await
+            .unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].title, "Sprayed fungicide");
 
         // 2. Search by object_id
-        let results = repository.search_entries(None, None, Some(object.id.value().to_string()), None, None).await.unwrap();
+        let results = repository
+            .search_entries(None, None, Some(object.id.value().to_string()), None, None)
+            .await
+            .unwrap();
         assert_eq!(results.len(), 2);
     }
 
@@ -994,7 +1041,8 @@ mod tests {
 
         // 2. Verify wrong PIN
         let entered_wrong_pin = "9999";
-        let computed_wrong_hash = crate::application::security::hash_pin(entered_wrong_pin, &salt_bytes);
+        let computed_wrong_hash =
+            crate::application::security::hash_pin(entered_wrong_pin, &salt_bytes);
         assert_ne!(computed_wrong_hash, hash_hex);
     }
 
@@ -1005,7 +1053,7 @@ mod tests {
         if db_file.exists() {
             let _ = std::fs::remove_file(&db_file);
         }
-        
+
         let db_url = format!("sqlite://{}", db_file.to_string_lossy().replace('\\', "/"));
         let pool = create_pool(&db_url).await.unwrap();
         run_migrations(&pool).await.unwrap();
@@ -1042,18 +1090,33 @@ mod tests {
             .unwrap();
 
         // Export via VACUUM INTO
-        sqlx::query(&format!("VACUUM INTO '{}'", backup_db_file.to_string_lossy().replace('\\', "/")))
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query(&format!(
+            "VACUUM INTO '{}'",
+            backup_db_file.to_string_lossy().replace('\\', "/")
+        ))
+        .execute(&pool)
+        .await
+        .unwrap();
 
         assert!(backup_db_file.exists());
 
         // Clear all tables
-        sqlx::query("DELETE FROM reminders").execute(&pool).await.unwrap();
-        sqlx::query("DELETE FROM entries").execute(&pool).await.unwrap();
-        sqlx::query("DELETE FROM objects").execute(&pool).await.unwrap();
-        sqlx::query("DELETE FROM categories").execute(&pool).await.unwrap();
+        sqlx::query("DELETE FROM reminders")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM entries")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM objects")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM categories")
+            .execute(&pool)
+            .await
+            .unwrap();
 
         // Verify empty state
         assert_eq!(repository.categories().await.unwrap().len(), 0);
@@ -1079,4 +1142,3 @@ mod tests {
         let _ = std::fs::remove_file(&db_file);
     }
 }
-

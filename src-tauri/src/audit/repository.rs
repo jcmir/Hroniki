@@ -1,6 +1,6 @@
-use async_trait::async_trait;
-use crate::identity::error::IdentityError;
 use super::models::AuditLogEntry;
+use crate::identity::error::IdentityError;
+use async_trait::async_trait;
 
 #[async_trait]
 pub trait AuditRepository: Send + Sync {

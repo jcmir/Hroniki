@@ -1,16 +1,17 @@
-use tauri::State;
 use crate::app_state::AppState;
 use chrono::Utc;
+use tauri::State;
 
 #[tauri::command]
 pub async fn is_onboarding_completed(state: State<'_, AppState>) -> Result<bool, String> {
     let service = state.service.lock().await;
     let pool = service.repository().pool();
 
-    let row: Option<(String,)> = sqlx::query_as("SELECT value FROM app_metadata WHERE key = 'onboarding_completed'")
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT value FROM app_metadata WHERE key = 'onboarding_completed'")
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| e.to_string())?;
 
     if let Some((val,)) = row {
         Ok(val == "true")
@@ -24,10 +25,11 @@ pub async fn get_username(state: State<'_, AppState>) -> Result<String, String> 
     let service = state.service.lock().await;
     let pool = service.repository().pool();
 
-    let row: Option<(String,)> = sqlx::query_as("SELECT value FROM app_metadata WHERE key = 'username'")
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT value FROM app_metadata WHERE key = 'username'")
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| e.to_string())?;
 
     if let Some((val,)) = row {
         Ok(val)
@@ -36,17 +38,22 @@ pub async fn get_username(state: State<'_, AppState>) -> Result<String, String> 
     }
 }
 
-pub(crate) async fn complete_onboarding_impl(username: &str, pool: &sqlx::SqlitePool) -> Result<(), String> {
+pub(crate) async fn complete_onboarding_impl(
+    username: &str,
+    pool: &sqlx::SqlitePool,
+) -> Result<(), String> {
     if username.trim().is_empty() {
         return Err("Username cannot be empty".to_string());
     }
 
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
-    sqlx::query("INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('onboarding_completed', 'true')")
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| e.to_string())?;
+    sqlx::query(
+        "INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('onboarding_completed', 'true')",
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
 
     sqlx::query("INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('username', ?)")
         .bind(username.trim())
@@ -59,7 +66,10 @@ pub(crate) async fn complete_onboarding_impl(username: &str, pool: &sqlx::Sqlite
 }
 
 #[tauri::command]
-pub async fn complete_onboarding(username: String, state: State<'_, AppState>) -> Result<(), String> {
+pub async fn complete_onboarding(
+    username: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     let service = state.service.lock().await;
     let pool = service.repository().pool();
     complete_onboarding_impl(&username, pool).await
@@ -67,10 +77,11 @@ pub async fn complete_onboarding(username: String, state: State<'_, AppState>) -
 
 pub(crate) async fn seed_demo_data_impl(pool: &sqlx::SqlitePool) -> Result<(), String> {
     // Check if onboarding is already completed to prevent accidental data loss
-    let row: Option<(String,)> = sqlx::query_as("SELECT value FROM app_metadata WHERE key = 'onboarding_completed'")
-        .fetch_optional(pool)
-        .await
-        .map_err(|e| e.to_string())?;
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT value FROM app_metadata WHERE key = 'onboarding_completed'")
+            .fetch_optional(pool)
+            .await
+            .map_err(|e| e.to_string())?;
 
     if let Some((val,)) = row {
         if val == "true" {
@@ -81,22 +92,45 @@ pub(crate) async fn seed_demo_data_impl(pool: &sqlx::SqlitePool) -> Result<(), S
     let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
     // 1. Clear old data to prevent key conflicts
-    sqlx::query("DELETE FROM reminders").execute(&mut *tx).await.map_err(|e| e.to_string())?;
-    sqlx::query("DELETE FROM photos").execute(&mut *tx).await.map_err(|e| e.to_string())?;
-    sqlx::query("DELETE FROM entries").execute(&mut *tx).await.map_err(|e| e.to_string())?;
-    sqlx::query("DELETE FROM objects").execute(&mut *tx).await.map_err(|e| e.to_string())?;
-    sqlx::query("DELETE FROM categories").execute(&mut *tx).await.map_err(|e| e.to_string())?;
+    sqlx::query("DELETE FROM reminders")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    sqlx::query("DELETE FROM photos")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    sqlx::query("DELETE FROM entries")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    sqlx::query("DELETE FROM objects")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    sqlx::query("DELETE FROM categories")
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
 
     // 2. Insert Categories
     sqlx::query("INSERT INTO categories (id, name, created_at) VALUES ('cat-garden', 'Сад', ?)")
         .bind(Utc::now().to_rfc3339())
-        .execute(&mut *tx).await.map_err(|e| e.to_string())?;
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
     sqlx::query("INSERT INTO categories (id, name, created_at) VALUES ('cat-home', 'Дом', ?)")
         .bind(Utc::now().to_rfc3339())
-        .execute(&mut *tx).await.map_err(|e| e.to_string())?;
-    sqlx::query("INSERT INTO categories (id, name, created_at) VALUES ('cat-auto', 'Имущество', ?)")
-        .bind(Utc::now().to_rfc3339())
-        .execute(&mut *tx).await.map_err(|e| e.to_string())?;
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+    sqlx::query(
+        "INSERT INTO categories (id, name, created_at) VALUES ('cat-auto', 'Имущество', ?)",
+    )
+    .bind(Utc::now().to_rfc3339())
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| e.to_string())?;
 
     // 3. Insert Objects
     sqlx::query("INSERT INTO objects (id, category_id, name, description, created_at) VALUES ('obj-apple', 'cat-garden', 'Любимая Яблоня', 'Сорт Антоновка, посажен в центре сада', ?)")
@@ -199,10 +233,11 @@ mod tests {
         run_migrations(&pool).await.unwrap();
 
         // 1. Verify default (empty)
-        let row: Option<(String,)> = sqlx::query_as("SELECT value FROM app_metadata WHERE key = 'onboarding_completed'")
-            .fetch_optional(&pool)
-            .await
-            .unwrap();
+        let row: Option<(String,)> =
+            sqlx::query_as("SELECT value FROM app_metadata WHERE key = 'onboarding_completed'")
+                .fetch_optional(&pool)
+                .await
+                .unwrap();
         assert!(row.is_none());
 
         // 2. Set username and complete onboarding
@@ -211,23 +246,27 @@ mod tests {
             .await
             .unwrap();
 
-        sqlx::query("INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('username', 'Александр')")
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            "INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('username', 'Александр')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
 
         // 3. Verify onboarding completed
-        let row_completed: (String,) = sqlx::query_as("SELECT value FROM app_metadata WHERE key = 'onboarding_completed'")
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+        let row_completed: (String,) =
+            sqlx::query_as("SELECT value FROM app_metadata WHERE key = 'onboarding_completed'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert_eq!(row_completed.0, "true");
 
         // 4. Verify username stored
-        let name_row: (String,) = sqlx::query_as("SELECT value FROM app_metadata WHERE key = 'username'")
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+        let name_row: (String,) =
+            sqlx::query_as("SELECT value FROM app_metadata WHERE key = 'username'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert_eq!(name_row.0, "Александр");
     }
 
@@ -240,11 +279,16 @@ mod tests {
         super::seed_demo_data_impl(&pool).await.unwrap();
 
         // 2. Mark onboarding as completed
-        super::complete_onboarding_impl("Александр", &pool).await.unwrap();
+        super::complete_onboarding_impl("Александр", &pool)
+            .await
+            .unwrap();
 
         // 3. Second seed should fail with error
         let result = super::seed_demo_data_impl(&pool).await;
         assert!(result.is_err());
-        assert_eq!(result.err().unwrap(), "Demo seeding is only allowed during onboarding");
+        assert_eq!(
+            result.err().unwrap(),
+            "Demo seeding is only allowed during onboarding"
+        );
     }
 }

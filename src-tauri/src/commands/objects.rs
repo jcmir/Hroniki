@@ -10,9 +10,15 @@ pub async fn create_object(
     state: State<'_, AppState>,
 ) -> Result<String, String> {
     let mut service = state.service.lock().await;
-    let categories = service.repository().categories().await.map_err(|e| e.to_string())?;
-    
-    let category = categories.into_iter().find(|c| c.id.value().to_string() == category_id)
+    let categories = service
+        .repository()
+        .categories()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let category = categories
+        .into_iter()
+        .find(|c| c.id.value().to_string() == category_id)
         .ok_or_else(|| "Category not found".to_string())?;
 
     let object = service
@@ -24,11 +30,13 @@ pub async fn create_object(
 }
 
 #[tauri::command]
-pub async fn get_objects(
-    state: State<'_, AppState>,
-) -> Result<Vec<ChronicleObject>, String> {
+pub async fn get_objects(state: State<'_, AppState>) -> Result<Vec<ChronicleObject>, String> {
     let service = state.service.lock().await;
-    service.repository().objects().await.map_err(|e| e.to_string())
+    service
+        .repository()
+        .objects()
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
