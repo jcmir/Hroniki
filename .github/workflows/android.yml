@@ -1,0 +1,53 @@
+name: Android CI
+
+on:
+  push:
+    branches: [ "main", "feature/**", "fix/**" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  android-build:
+    name: Android Build & Contract Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Install Rust toolchain with Android target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, armv7-linux-androideabi, x86_64-linux-android
+          components: clippy, rustfmt
+
+      - name: Cache Cargo & Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-android-${{ hashFiles('**/Cargo.lock', '**/*.gradle*') }}
+          restore-keys: |
+            ${{ runner.os }}-android-
+
+      - name: Verify Rust Cargo compilation
+        working-directory: src-tauri
+        run: cargo check --target aarch64-linux-android
+
+      - name: Run unit & contract tests
+        working-directory: src-tauri
+        run: cargo test --all

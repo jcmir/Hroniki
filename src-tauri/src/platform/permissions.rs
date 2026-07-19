@@ -26,7 +26,8 @@ impl PermissionKind {
 pub enum PermissionStatus {
     Granted,
     Denied,
-    NotDetermined,
+    PermanentlyDenied,
+    Unsupported,
 }
 
 #[async_trait]

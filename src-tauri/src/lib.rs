@@ -21,7 +21,7 @@ use crate::{
             DesktopNotificationPlatform, DesktopPermissionPlatform, DesktopSchedulePlatform,
             MemorySecureStoragePlatform,
         },
-        PlatformCapabilities, PlatformContext,
+        PlatformCapabilities, PlatformContext, StaticCapabilitiesProvider,
     },
     reminder::{
         DummyNotificationProvider, ReminderScheduler, ReminderService, SqliteReminderRepository,
@@ -126,12 +126,14 @@ pub fn run() {
                     false, // strongbox
                     false, // secure_hardware
                 );
+                let capabilities_provider =
+                    Arc::new(StaticCapabilitiesProvider::new(platform_capabilities));
                 let platform_context = Arc::new(PlatformContext::new(
                     platform_notifications,
                     platform_storage,
                     platform_permissions,
                     platform_schedule,
-                    platform_capabilities,
+                    capabilities_provider,
                 ));
 
                 app.manage(AppState {

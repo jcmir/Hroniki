@@ -8,13 +8,15 @@ pub mod schedule;
 pub mod session;
 pub mod storage;
 
-pub use capabilities::PlatformCapabilities;
+pub use capabilities::{
+    PlatformCapabilities, PlatformCapabilitiesProvider, StaticCapabilitiesProvider,
+};
 pub use context::PlatformContext;
 pub use lifecycle::{LifecycleEvent, LifecycleTranslator};
 pub use notifications::NotificationPlatform;
 pub use permissions::{PermissionKind, PermissionPlatform, PermissionStatus};
 pub use schedule::SchedulePlatform;
-pub use session::SessionManager;
+pub use session::{SessionManager, SessionState};
 pub use storage::{SecretIdentifier, SecretKind, SecureStoragePlatform};
 
 #[cfg(test)]

@@ -46,29 +46,37 @@ impl PermissionPlatform for AndroidPermissionPlatform {
             PermissionKind::Notifications => {
                 if self.sdk_version >= 33 {
                     // Android 13+ requires explicit POST_NOTIFICATIONS grant
-                    Ok(PermissionStatus::NotDetermined)
+                    Ok(PermissionStatus::Denied)
                 } else {
                     // Pre-Android 13 notifications are granted by default
                     Ok(PermissionStatus::Granted)
                 }
             }
-            PermissionKind::Storage => Ok(PermissionStatus::NotDetermined),
+            PermissionKind::Storage => Ok(PermissionStatus::Denied),
             PermissionKind::ExactAlarms => {
                 if self.sdk_version >= 31 {
-                    Ok(PermissionStatus::NotDetermined)
+                    Ok(PermissionStatus::Denied)
                 } else {
                     Ok(PermissionStatus::Granted)
                 }
             }
-            PermissionKind::Biometrics | PermissionKind::Camera => {
-                Ok(PermissionStatus::NotDetermined)
-            }
+            PermissionKind::Biometrics | PermissionKind::Camera => Ok(PermissionStatus::Denied),
         }
     }
 
     async fn request_permission(&self, kind: PermissionKind) -> Result<PermissionStatus, String> {
         let mut map = self.permission_states.lock().await;
-        let new_status = PermissionStatus::Granted;
+
+        // If permission was permanently denied, return PermanentlyDenied without re-requesting OS dialog
+        if let Some(PermissionStatus::PermanentlyDenied) = map.get(&kind) {
+            return Ok(PermissionStatus::PermanentlyDenied);
+        }
+
+        let new_status = match map.get(&kind) {
+            Some(status) => *status,
+            None => PermissionStatus::Granted,
+        };
+
         map.insert(kind, new_status);
         tracing::info!(
             "[AndroidPermissionPlatform] Permission {:?} ({}) requested -> {:?}",

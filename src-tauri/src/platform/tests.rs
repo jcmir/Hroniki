@@ -348,8 +348,11 @@ async fn test_platform_context_initialization() {
     let permissions = Arc::new(DesktopPermissionPlatform);
     let schedule = Arc::new(DesktopSchedulePlatform::new());
     let capabilities = PlatformCapabilities::new(true, true, true, false, false, false);
+    let provider = Arc::new(super::capabilities::StaticCapabilitiesProvider::new(
+        capabilities,
+    ));
 
-    let context = PlatformContext::new(notifications, storage, permissions, schedule, capabilities);
+    let context = PlatformContext::new(notifications, storage, permissions, schedule, provider);
 
     // Call and check permissions
     let status = context
@@ -571,7 +574,7 @@ async fn test_android_permissions_contract() {
         .check_permission(PermissionKind::Notifications)
         .await
         .unwrap();
-    assert_eq!(status_notif, PermissionStatus::NotDetermined);
+    assert_eq!(status_notif, PermissionStatus::Denied);
 
     // Request notification permission
     let req_status = platform_android_13
@@ -685,4 +688,117 @@ fn test_platform_capabilities_serialization() {
     assert!(!deserialized.biometric);
     assert!(deserialized.strongbox);
     assert!(!deserialized.secure_hardware);
+}
+
+#[tokio::test]
+async fn test_session_lock_state_machine_full_flow() {
+    use super::session::SessionState;
+
+    let event_bus = Arc::new(EventBus::new());
+    let mut rx = event_bus.subscribe();
+
+    let session_mgr = Arc::new(SessionManager::new());
+    session_mgr.start_event_listener(&event_bus);
+
+    assert_eq!(session_mgr.state().await, SessionState::Active);
+
+    // 1. Set token while Active
+    session_mgr
+        .set_token("active_jwt", b"secret_token".to_vec())
+        .await;
+    assert_eq!(
+        session_mgr.get_token("active_jwt").await,
+        Some(b"secret_token".to_vec())
+    );
+
+    // 2. Publish DomainEvent::ApplicationLocked -> Transition to Locked
+    event_bus.publish(DomainEvent::ApplicationLocked);
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    assert_eq!(session_mgr.state().await, SessionState::Locked);
+    assert!(session_mgr.is_locked().await);
+    assert_eq!(session_mgr.get_token("active_jwt").await, None);
+
+    // 3. Publish DomainEvent::ApplicationResumed -> Transition to AwaitingUnlock
+    event_bus.publish(DomainEvent::ApplicationResumed);
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    assert_eq!(session_mgr.state().await, SessionState::AwaitingUnlock);
+    assert!(session_mgr.is_awaiting_unlock().await);
+
+    // Verify AuthenticationRequired domain event received
+    let mut rec_auth_req = false;
+    while let Ok(evt) = rx.try_recv() {
+        if let DomainEvent::AuthenticationRequired = evt {
+            rec_auth_req = true;
+            break;
+        }
+    }
+    assert!(
+        rec_auth_req,
+        "Expected AuthenticationRequired event upon ApplicationResumed"
+    );
+
+    // 4. Authenticate user -> unlock_session -> Transition to Active
+    session_mgr.unlock_session(&event_bus).await;
+    assert_eq!(session_mgr.state().await, SessionState::Active);
+    assert!(session_mgr.is_active().await);
+
+    // Verify SessionRestored domain event received
+    let mut rec_restored = false;
+    while let Ok(evt) = rx.try_recv() {
+        if let DomainEvent::SessionRestored = evt {
+            rec_restored = true;
+            break;
+        }
+    }
+    assert!(
+        rec_restored,
+        "Expected SessionRestored event upon unlock_session"
+    );
+}
+
+#[tokio::test]
+async fn test_permission_status_granular() {
+    let platform = AndroidPermissionPlatform::new(33);
+
+    // Set permanently denied
+    platform
+        .set_permission_status(
+            PermissionKind::Notifications,
+            PermissionStatus::PermanentlyDenied,
+        )
+        .await;
+
+    let status = platform
+        .check_permission(PermissionKind::Notifications)
+        .await
+        .unwrap();
+    assert_eq!(status, PermissionStatus::PermanentlyDenied);
+
+    // Re-requesting should return PermanentlyDenied without popping OS dialog
+    let req = platform
+        .request_permission(PermissionKind::Notifications)
+        .await
+        .unwrap();
+    assert_eq!(req, PermissionStatus::PermanentlyDenied);
+}
+
+#[tokio::test]
+async fn test_capabilities_provider_dynamic_refresh() {
+    use super::capabilities::{PlatformCapabilitiesProvider, StaticCapabilitiesProvider};
+
+    let initial = PlatformCapabilities::new(true, false, false, false, false, false);
+    let provider = StaticCapabilitiesProvider::new(initial);
+
+    assert!(provider.current().notifications);
+    assert!(!provider.current().exact_alarms);
+
+    // Dynamically update capabilities after user grants permission in OS
+    let updated = PlatformCapabilities::new(true, true, true, true, false, false);
+    provider.update(updated.clone()).await;
+
+    let refreshed = provider.refresh().await.unwrap();
+    assert_eq!(refreshed, updated);
+    assert!(provider.current().exact_alarms);
 }

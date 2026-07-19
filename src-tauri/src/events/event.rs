@@ -17,6 +17,8 @@ pub enum DomainEvent {
     SessionClosed {
         session_id: String,
     },
+    AuthenticationRequired,
+    SessionRestored,
 
     // Chronology Events
     CategoryCreated {
