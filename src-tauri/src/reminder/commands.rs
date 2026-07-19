@@ -16,7 +16,7 @@ pub async fn create_reminder_cmd(
         .map_err(|e| e.to_string())?
         .with_timezone(&Utc);
 
-    let rec_rule = RecurrenceRule::parse(&recurrence);
+    let rec_rule = RecurrenceRule::parse(&recurrence)?;
 
     state
         .reminder_service

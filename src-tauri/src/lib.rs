@@ -16,7 +16,7 @@ use crate::{
     app_state::AppState,
     application::chronology::ChronologyService,
     reminder::{
-        DummyNotificationProvider, ReminderScheduler, ReminderService, ReminderSubscriber,
+        DummyNotificationProvider, ReminderScheduler, ReminderService,
         SqliteReminderRepository,
     },
     search::{SearchService, SearchSubscriber, SqliteSearchRepository},
@@ -98,17 +98,13 @@ pub fn run() {
                     SearchSubscriber::new(event_bus.clone(), search_service.clone(), pool.clone());
                 search_subscriber.start();
 
-                // Initialize new Reminder Service, Scheduler, Subscriber
+                // Initialize new Reminder Service and Scheduler
                 let reminder_repo = Arc::new(SqliteReminderRepository::new(pool.clone()));
                 let reminder_service = Arc::new(ReminderService::new(reminder_repo.clone()));
                 let notification_provider = Arc::new(DummyNotificationProvider);
                 let reminder_scheduler =
                     ReminderScheduler::new(reminder_repo, notification_provider);
                 reminder_scheduler.start();
-
-                let reminder_subscriber =
-                    ReminderSubscriber::new(event_bus.clone(), reminder_service.clone());
-                reminder_subscriber.start();
 
                 app.manage(AppState {
                     service: Arc::new(Mutex::new(service)),

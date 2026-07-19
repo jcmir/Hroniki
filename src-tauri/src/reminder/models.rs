@@ -8,6 +8,7 @@ pub enum ReminderStatus {
     Triggered,
     Completed,
     Cancelled,
+    Failed,
 }
 
 impl ReminderStatus {
@@ -18,16 +19,19 @@ impl ReminderStatus {
             ReminderStatus::Triggered => "Triggered",
             ReminderStatus::Completed => "Completed",
             ReminderStatus::Cancelled => "Cancelled",
+            ReminderStatus::Failed => "Failed",
         }
     }
 
-    pub fn parse(s: &str) -> Self {
+    pub fn parse(s: &str) -> Result<Self, String> {
         match s {
-            "Scheduled" => ReminderStatus::Scheduled,
-            "Triggered" => ReminderStatus::Triggered,
-            "Completed" => ReminderStatus::Completed,
-            "Cancelled" => ReminderStatus::Cancelled,
-            _ => ReminderStatus::Pending,
+            "Pending" => Ok(ReminderStatus::Pending),
+            "Scheduled" => Ok(ReminderStatus::Scheduled),
+            "Triggered" => Ok(ReminderStatus::Triggered),
+            "Completed" => Ok(ReminderStatus::Completed),
+            "Cancelled" => Ok(ReminderStatus::Cancelled),
+            "Failed" => Ok(ReminderStatus::Failed),
+            _ => Err(format!("Unknown reminder status: {}", s)),
         }
     }
 }
@@ -38,24 +42,36 @@ pub enum RecurrenceRule {
     Daily,
     Weekly,
     Monthly,
+    EveryNDays(i64),
 }
 
 impl RecurrenceRule {
-    pub fn as_str(&self) -> &'static str {
+    pub fn as_str(&self) -> String {
         match self {
-            RecurrenceRule::Once => "Once",
-            RecurrenceRule::Daily => "Daily",
-            RecurrenceRule::Weekly => "Weekly",
-            RecurrenceRule::Monthly => "Monthly",
+            RecurrenceRule::Once => "Once".to_string(),
+            RecurrenceRule::Daily => "Daily".to_string(),
+            RecurrenceRule::Weekly => "Weekly".to_string(),
+            RecurrenceRule::Monthly => "Monthly".to_string(),
+            RecurrenceRule::EveryNDays(n) => format!("EveryNDays:{}", n),
         }
     }
 
-    pub fn parse(s: &str) -> Self {
+    pub fn parse(s: &str) -> Result<Self, String> {
         match s {
-            "Daily" => RecurrenceRule::Daily,
-            "Weekly" => RecurrenceRule::Weekly,
-            "Monthly" => RecurrenceRule::Monthly,
-            _ => RecurrenceRule::Once,
+            "Once" => Ok(RecurrenceRule::Once),
+            "Daily" => Ok(RecurrenceRule::Daily),
+            "Weekly" => Ok(RecurrenceRule::Weekly),
+            "Monthly" => Ok(RecurrenceRule::Monthly),
+            _ if s.starts_with("EveryNDays:") => {
+                let parts: Vec<&str> = s.split(':').collect();
+                if parts.len() == 2 {
+                    if let Ok(n) = parts[1].parse::<i64>() {
+                        return Ok(RecurrenceRule::EveryNDays(n));
+                    }
+                }
+                Err(format!("Invalid EveryNDays format: {}", s))
+            }
+            _ => Err(format!("Unknown recurrence rule: {}", s)),
         }
     }
 }

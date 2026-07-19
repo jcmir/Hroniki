@@ -1,8 +1,8 @@
-use super::models::{RecurrenceRule, Reminder, ReminderStatus};
-use super::provider::NotificationProvider;
-use super::repository::ReminderRepository;
-use chrono::Utc;
 use std::sync::Arc;
+use super::repository::ReminderRepository;
+use super::provider::NotificationProvider;
+use super::models::{ReminderStatus, RecurrenceRule};
+use chrono::Utc;
 use tokio::time::{sleep, Duration};
 
 pub struct ReminderScheduler {
@@ -27,84 +27,69 @@ impl ReminderScheduler {
 
         tokio::spawn(async move {
             loop {
-                // Poll active reminders (Pending and Scheduled)
-                if let Ok(active) = repository.get_active_reminders().await {
-                    let now = Utc::now();
-                    for reminder in active {
-                        // Check if trigger time has arrived
-                        if reminder.trigger_at <= now {
-                            // Optimistic locking / atomic state transition:
-                            // Try to transition Pending -> Triggered or Scheduled -> Triggered
-                            let mut claimed = false;
-                            for old in &[ReminderStatus::Pending, ReminderStatus::Scheduled] {
-                                match repository
-                                    .update_status(
-                                        &reminder.id,
-                                        old.clone(),
-                                        ReminderStatus::Triggered,
-                                    )
-                                    .await
-                                {
-                                    Ok(true) => {
-                                        claimed = true;
-                                        break;
+                // Poll active reminders (Pending, Scheduled, Failed)
+                match repository.get_active_reminders().await {
+                    Ok(active) => {
+                        let now = Utc::now();
+                        for mut reminder in active {
+                            if reminder.trigger_at <= now {
+                                // Claim reminder (atomic transition to Triggered)
+                                let mut claimed = false;
+                                for old in &[ReminderStatus::Pending, ReminderStatus::Scheduled, ReminderStatus::Failed] {
+                                    match repository.update_status(&reminder.id, old.clone(), ReminderStatus::Triggered).await {
+                                        Ok(true) => {
+                                            claimed = true;
+                                            break;
+                                        }
+                                        Err(err) => {
+                                            tracing::error!(id = ?reminder.id, error = ?err, "Failed to update reminder status to Triggered");
+                                        }
+                                        _ => {}
                                     }
-                                    Err(err) => {
-                                        eprintln!(
-                                            "[Scheduler] Failed to update reminder status: {:?}",
-                                            err
-                                        );
-                                    }
-                                    _ => {}
-                                }
-                            }
-
-                            if claimed {
-                                // Successfully claimed, now dispatch notification
-                                if let Err(e) = notification_provider
-                                    .send(&reminder.title, reminder.body.as_deref())
-                                    .await
-                                {
-                                    eprintln!("[Scheduler] Failed to send notification for reminder {}: {}", reminder.id, e);
                                 }
 
-                                // Handle recurrence
-                                if reminder.recurrence != RecurrenceRule::Once {
-                                    let next_trigger = match reminder.recurrence {
-                                        RecurrenceRule::Daily => {
-                                            Some(reminder.trigger_at + chrono::Duration::days(1))
-                                        }
-                                        RecurrenceRule::Weekly => {
-                                            Some(reminder.trigger_at + chrono::Duration::weeks(1))
-                                        }
-                                        RecurrenceRule::Monthly => {
-                                            Some(reminder.trigger_at + chrono::Duration::days(30))
-                                        } // Simplified approximation
-                                        RecurrenceRule::Once => None,
-                                    };
+                                if claimed {
+                                    // Try sending notification
+                                    match notification_provider.send(&reminder.title, reminder.body.as_deref()).await {
+                                        Ok(_) => {
+                                            // Handle recurrence: atomically reschedule current reminder by updating trigger_at and status -> Pending
+                                            if reminder.recurrence != RecurrenceRule::Once {
+                                                let next_trigger = match reminder.recurrence {
+                                                    RecurrenceRule::Daily => Some(reminder.trigger_at + chrono::Duration::days(1)),
+                                                    RecurrenceRule::Weekly => Some(reminder.trigger_at + chrono::Duration::weeks(1)),
+                                                    RecurrenceRule::Monthly => Some(reminder.trigger_at + chrono::Duration::days(30)),
+                                                    RecurrenceRule::EveryNDays(n) => Some(reminder.trigger_at + chrono::Duration::days(n)),
+                                                    RecurrenceRule::Once => None,
+                                                };
 
-                                    if let Some(next_dt) = next_trigger {
-                                        let next_reminder = Reminder {
-                                            id: uuid::Uuid::new_v4().to_string(),
-                                            entry_id: reminder.entry_id.clone(),
-                                            title: reminder.title.clone(),
-                                            body: reminder.body.clone(),
-                                            trigger_at: next_dt,
-                                            recurrence: reminder.recurrence.clone(),
-                                            status: ReminderStatus::Pending,
-                                            created_at: Utc::now(),
-                                            updated_at: Utc::now(),
-                                            completed_at: None,
-                                        };
-                                        let _ = repository.save(&next_reminder).await;
+                                                if let Some(next_dt) = next_trigger {
+                                                    reminder.trigger_at = next_dt;
+                                                    reminder.status = ReminderStatus::Pending;
+                                                    reminder.updated_at = Utc::now();
+
+                                                    if let Err(err) = repository.save(&reminder).await {
+                                                        tracing::error!(id = ?reminder.id, error = ?err, "Failed to reschedule recurring reminder");
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        Err(e) => {
+                                            tracing::error!(id = ?reminder.id, error = ?e, "Failed to send notification. Rolling back status to Failed");
+                                            // Rollback state back to Failed so it is eligible for retry
+                                            if let Err(err) = repository.update_status(&reminder.id, ReminderStatus::Triggered, ReminderStatus::Failed).await {
+                                                tracing::error!(id = ?reminder.id, error = ?err, "Critical: Failed to rollback status to Failed after notification delivery failure");
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                    Err(err) => {
+                        tracing::error!(error = ?err, "Scheduler failed to poll active reminders from repository");
+                    }
                 }
 
-                // Tick interval: 10 seconds for high responsiveness in tests and low resource usage
                 sleep(Duration::from_secs(10)).await;
             }
         });

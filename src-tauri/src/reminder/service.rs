@@ -1,7 +1,7 @@
-use super::models::{RecurrenceRule, Reminder, ReminderStatus};
+use std::sync::Arc;
+use super::models::{Reminder, ReminderStatus, RecurrenceRule};
 use super::repository::ReminderRepository;
 use chrono::Utc;
-use std::sync::Arc;
 use uuid::Uuid;
 
 pub struct ReminderService {
@@ -21,6 +21,10 @@ impl ReminderService {
         trigger_at: chrono::DateTime<Utc>,
         recurrence: RecurrenceRule,
     ) -> Result<Reminder, String> {
+        if title.trim().is_empty() {
+            return Err("Title cannot be empty".to_string());
+        }
+
         let reminder = Reminder {
             id: Uuid::new_v4().to_string(),
             entry_id,
@@ -39,23 +43,22 @@ impl ReminderService {
     }
 
     pub async fn cancel_reminder(&self, id: &str) -> Result<(), String> {
-        if let Some(mut reminder) = self.repository.find_by_id(id).await? {
-            reminder.status = ReminderStatus::Cancelled;
-            reminder.updated_at = Utc::now();
-            self.repository.save(&reminder).await?;
+        // Atomic status transition for cancellation to avoid overwriting triggered states
+        for old in &[ReminderStatus::Pending, ReminderStatus::Scheduled, ReminderStatus::Failed] {
+            if self.repository.update_status(id, old.clone(), ReminderStatus::Cancelled).await? {
+                return Ok(());
+            }
         }
-        Ok(())
+        Err("Reminder cannot be cancelled because it is already triggered, completed or cancelled".to_string())
     }
 
     pub async fn complete_reminder(&self, id: &str) -> Result<bool, String> {
-        // Find existing reminder to ensure it exists
         if self.repository.find_by_id(id).await?.is_some() {
-            // Transition Triggered -> Completed or Pending -> Completed
-            // Try updating from Triggered first, if not try from Scheduled, then Pending
             for old in &[
                 ReminderStatus::Triggered,
                 ReminderStatus::Scheduled,
                 ReminderStatus::Pending,
+                ReminderStatus::Failed,
             ] {
                 if self
                     .repository
