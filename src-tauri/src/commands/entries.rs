@@ -8,6 +8,7 @@ pub async fn create_entry(
     title: String,
     description: Option<String>,
     image_filenames: Option<Vec<String>>,
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
     let mut service = state.service.lock().await;
@@ -16,20 +17,38 @@ pub async fn create_entry(
     let object = objects.into_iter().find(|o| o.id.value().to_string() == object_id)
         .ok_or_else(|| "Object not found".to_string())?;
 
-    let entry = service
-        .create_entry(&object, title, description)
+    // Create entry domain object
+    let entry = crate::domain::Entry::new(object.id, chrono::Utc::now(), title, description)
+        .map_err(|e| e.to_string())?;
+
+    // Create photo domain objects
+    let mut photos = Vec::new();
+    if let Some(ref filenames) = image_filenames {
+        for filename in filenames {
+            let photo = crate::domain::Photo::new(entry.id, filename, filename);
+            photos.push(photo);
+        }
+    }
+
+    // Persist entry and photos atomically
+    service
+        .repository_mut()
+        .save_entry_with_photos(entry.clone(), photos)
         .await
         .map_err(|e| e.to_string())?;
 
-    // Persist associated photos
+    // If database transaction succeeded, rename staging files to originals
     if let Some(filenames) = image_filenames {
-        for filename in filenames {
-            let photo = crate::domain::Photo::new(entry.id, &filename, &filename);
-            service
-                .repository_mut()
-                .save_photo(photo)
-                .await
-                .map_err(|e| e.to_string())?;
+        if let Ok(app_data_dir) = app.path().app_data_dir() {
+            let staging_dir = app_data_dir.join("media").join("staging");
+            let originals_dir = app_data_dir.join("media").join("originals");
+            for filename in filenames {
+                let staging_path = staging_dir.join(&filename);
+                let originals_path = originals_dir.join(&filename);
+                if staging_path.exists() {
+                    std::fs::rename(staging_path, originals_path).map_err(|e| e.to_string())?;
+                }
+            }
         }
     }
 
@@ -73,14 +92,22 @@ pub async fn delete_entry(
     service.repository_mut().delete_entry(id).await.map_err(|e| e.to_string())?;
 
     // Physical deletion of original photo files from media originals directory
+    let mut delete_errors = Vec::new();
     if let Ok(app_data_dir) = app.path().app_data_dir() {
         let media_originals_dir = app_data_dir.join("media").join("originals");
         for photo in photos {
             let file_path = media_originals_dir.join(&photo.path);
             if file_path.exists() {
-                let _ = std::fs::remove_file(file_path);
+                if let Err(e) = std::fs::remove_file(&file_path) {
+                    eprintln!("Failed to remove file {:?}: {}", file_path, e);
+                    delete_errors.push(format!("Failed to delete photo {}: {}", photo.path, e));
+                }
             }
         }
+    }
+
+    if !delete_errors.is_empty() {
+        return Err(format!("Partial success: entry deleted from DB, but some files could not be removed: {}", delete_errors.join("; ")));
     }
 
     Ok(())

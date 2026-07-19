@@ -28,6 +28,12 @@ impl ChronologyRepository for MemoryChronologyRepository {
         Ok(())
     }
 
+    async fn save_entry_with_photos(&mut self, entry: Entry, photos: Vec<Photo>) -> Result<(), String> {
+        self.entries.push(entry);
+        self.photos.extend(photos);
+        Ok(())
+    }
+
     async fn save_photo(&mut self, photo: Photo) -> Result<(), String> {
         self.photos.push(photo);
         Ok(())

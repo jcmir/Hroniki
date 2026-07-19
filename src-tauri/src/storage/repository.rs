@@ -8,6 +8,8 @@ pub trait ChronologyRepository {
 
     async fn save_entry(&mut self, entry: Entry) -> Result<(), String>;
 
+    async fn save_entry_with_photos(&mut self, entry: Entry, photos: Vec<Photo>) -> Result<(), String>;
+
     async fn save_photo(&mut self, photo: Photo) -> Result<(), String>;
 
     async fn save_reminder(&mut self, reminder: Reminder) -> Result<(), String>;

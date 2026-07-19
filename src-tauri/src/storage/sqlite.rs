@@ -116,6 +116,84 @@ impl ChronologyRepository for SqliteChronologyRepository {
         Ok(())
     }
 
+    async fn save_entry_with_photos(&mut self, entry: Entry, photos: Vec<Photo>) -> Result<(), String> {
+        let mut tx = self.pool.begin().await.map_err(|e| e.to_string())?;
+
+        sqlx::query(
+            r#"
+            INSERT INTO entries
+            (
+                id,
+                object_id,
+                occurred_at,
+                title,
+                description,
+                created_at,
+                updated_at
+            )
+            VALUES
+            (
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?,
+                ?
+            )
+            "#,
+        )
+        .bind(entry.id.value().to_string())
+        .bind(entry.object_id.value().to_string())
+        .bind(entry.occurred_at.to_rfc3339())
+        .bind(entry.title)
+        .bind(entry.description)
+        .bind(entry.created_at.to_rfc3339())
+        .bind(entry.updated_at.to_rfc3339())
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| e.to_string())?;
+
+        for photo in photos {
+            sqlx::query(
+                r#"
+                INSERT INTO photos
+                (
+                    id,
+                    entry_id,
+                    path,
+                    thumbnail,
+                    created_at
+                )
+                VALUES
+                (
+                    ?,
+                    ?,
+                    ?,
+                    ?,
+                    ?
+                )
+                ON CONFLICT(id) DO UPDATE SET
+                    entry_id = excluded.entry_id,
+                    path = excluded.path,
+                    thumbnail = excluded.thumbnail,
+                    created_at = excluded.created_at
+                "#,
+            )
+            .bind(photo.id.value().to_string())
+            .bind(photo.entry_id.value().to_string())
+            .bind(photo.path)
+            .bind(photo.thumbnail)
+            .bind(photo.created_at.to_rfc3339())
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+        }
+
+        tx.commit().await.map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     async fn categories(&self) -> Result<Vec<Category>, String> {
         let rows = sqlx::query(
             r#"
@@ -651,6 +729,21 @@ mod tests {
         let after = repository.reminders().await.unwrap();
         assert_eq!(after.len(), 1);
         assert_eq!(after[0].status, "Completed");
+    }
+
+    #[tokio::test]
+    async fn foreign_key_violating_object_fails() {
+        let pool = create_pool("sqlite::memory:").await.unwrap();
+        run_migrations(&pool).await.unwrap();
+        let mut repository = SqliteChronologyRepository::new(pool);
+
+        let non_existent_cat_id = crate::domain::CategoryId::from(uuid::Uuid::new_v4());
+        let object = ChronicleObject::new(non_existent_cat_id, "Ghost tree", None).unwrap();
+
+        let result = repository.save_object(object).await;
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err();
+        assert!(err_msg.contains("FOREIGN KEY constraint failed") || err_msg.contains("foreign key constraint failed"));
     }
 }
 
