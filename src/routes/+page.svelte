@@ -8,6 +8,7 @@
   import Card from '$lib/components/Card.svelte';
   import EntryDetail from '$lib/components/EntryDetail.svelte';
   import PinLockScreen from '$lib/components/PinLockScreen.svelte';
+  import OnboardingScreen from '$lib/components/OnboardingScreen.svelte';
   import { mockInvoke } from '$lib/mock/mockRepository';
 
   // State variables from DB
@@ -61,6 +62,10 @@
   let importPasswordInput = $state('');
   let isPinEnabled = $state(false);
 
+  // Onboarding states
+  let showOnboarding = $state(false);
+  let currentUsername = $state('Пользователь');
+
   // Selected object chronicle view state
   let selectedObjectForChronicle = $state<any>(null);
   let selectedObjectStats = $state<any>(null);
@@ -73,11 +78,37 @@
         isAppLocked = true;
       }
       isPinEnabled = pinConfigured;
+
+      const onboardingDone = await safeInvoke<boolean>('is_onboarding_completed');
+      if (!onboardingDone) {
+        showOnboarding = true;
+      } else {
+        currentUsername = await safeInvoke<string>('get_username');
+      }
     } catch (e) {
-      console.error('Failed to query PIN lock configuration:', e);
+      console.error('Failed to query startup configurations:', e);
     }
     await refreshData();
   });
+
+  async function handleOnboardingComplete(name: string) {
+    try {
+      await safeInvoke('complete_onboarding', { username: name });
+      currentUsername = name;
+      showOnboarding = false;
+      await refreshData();
+    } catch (e) {
+      console.error('Failed to complete onboarding:', e);
+    }
+  }
+
+  async function handleSeedDemoData() {
+    try {
+      await safeInvoke('seed_demo_data');
+    } catch (e) {
+      console.error('Failed to seed demo data:', e);
+    }
+  }
 
   async function handleVerifyPin(pin: string): Promise<boolean> {
     try {
@@ -382,7 +413,7 @@
   <header class="app-header">
     <div class="header-logo">
       <span class="logo-spark">✨</span>
-      <h1>ХРОНИКИ</h1>
+      <h1>Хроника {currentUsername}</h1>
     </div>
     <div class="header-actions">
       <button
@@ -935,6 +966,14 @@
   <!-- Pin Lock Screen Overlay -->
   {#if isAppLocked}
     <PinLockScreen onVerify={handleVerifyPin} onSuccess={() => isAppLocked = false} />
+  {/if}
+  <!-- Onboarding Screen Overlay -->
+  {#if showOnboarding}
+    <OnboardingScreen
+      onComplete={handleOnboardingComplete}
+      onSeedDemo={handleSeedDemoData}
+      onSetPin={handleSetupNewPin}
+    />
   {/if}
 </main>
 

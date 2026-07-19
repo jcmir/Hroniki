@@ -83,6 +83,10 @@ pub fn run() {
             commands::pin::disable_pin,
             commands::backup::export_archive,
             commands::backup::import_archive,
+            commands::onboarding::is_onboarding_completed,
+            commands::onboarding::complete_onboarding,
+            commands::onboarding::seed_demo_data,
+            commands::onboarding::get_username,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

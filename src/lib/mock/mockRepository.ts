@@ -141,5 +141,27 @@ export function mockInvoke(cmd: string, args: any): any {
   if (cmd === 'import_archive') {
     return null;
   }
+  if (cmd === 'is_onboarding_completed') {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('hroniki_mock_onboarding_completed') === 'true';
+    }
+    return false;
+  }
+  if (cmd === 'complete_onboarding') {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('hroniki_mock_onboarding_completed', 'true');
+      localStorage.setItem('hroniki_mock_username', args.username);
+    }
+    return null;
+  }
+  if (cmd === 'seed_demo_data') {
+    return null;
+  }
+  if (cmd === 'get_username') {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('hroniki_mock_username') || 'Александр';
+    }
+    return 'Александр';
+  }
   return null;
 }
