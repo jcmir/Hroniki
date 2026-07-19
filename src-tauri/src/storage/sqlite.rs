@@ -964,5 +964,119 @@ mod tests {
         let results = repository.search_entries(None, None, Some(object.id.value().to_string()), None, None).await.unwrap();
         assert_eq!(results.len(), 2);
     }
+
+    #[tokio::test]
+    async fn test_wrong_pin_verification() {
+        let pool = create_pool("sqlite::memory:").await.unwrap();
+        run_migrations(&pool).await.unwrap();
+
+        let salt_bytes = crate::application::security::generate_salt();
+        let salt_hex = crate::application::security::to_hex(&salt_bytes);
+        let hash_hex = crate::application::security::hash_pin("1234", &salt_bytes);
+
+        // Store salt and hash in metadata
+        sqlx::query("INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('pin_hash', ?)")
+            .bind(&hash_hex)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        sqlx::query("INSERT OR REPLACE INTO app_metadata (key, value) VALUES ('pin_salt', ?)")
+            .bind(&salt_hex)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        // 1. Verify correct PIN
+        let entered_pin = "1234";
+        let computed_hash = crate::application::security::hash_pin(entered_pin, &salt_bytes);
+        assert_eq!(computed_hash, hash_hex);
+
+        // 2. Verify wrong PIN
+        let entered_wrong_pin = "9999";
+        let computed_wrong_hash = crate::application::security::hash_pin(entered_wrong_pin, &salt_bytes);
+        assert_ne!(computed_wrong_hash, hash_hex);
+    }
+
+    #[tokio::test]
+    async fn test_full_backup_restore_cycle() {
+        let temp_dir = std::env::temp_dir();
+        let db_file = temp_dir.join("hroniki_test_db.sqlite");
+        if db_file.exists() {
+            let _ = std::fs::remove_file(&db_file);
+        }
+        
+        let db_url = format!("sqlite://{}", db_file.to_string_lossy().replace('\\', "/"));
+        let pool = create_pool(&db_url).await.unwrap();
+        run_migrations(&pool).await.unwrap();
+        let mut repository = SqliteChronologyRepository::new(pool.clone());
+
+        let category = Category::new("Garden").unwrap();
+        repository.save_category(category.clone()).await.unwrap();
+
+        let object = ChronicleObject::new(category.id, "Apple tree", None).unwrap();
+        repository.save_object(object.clone()).await.unwrap();
+
+        let entry = Entry::new(object.id, Utc::now(), "Treatment", None).unwrap();
+        repository.save_entry(entry.clone()).await.unwrap();
+
+        let reminder = Reminder::new(entry.id.clone(), Utc::now(), Some(7));
+        repository.save_reminder(reminder.clone()).await.unwrap();
+
+        // Verify initial state
+        assert_eq!(repository.categories().await.unwrap().len(), 1);
+        assert_eq!(repository.objects().await.unwrap().len(), 1);
+        assert_eq!(repository.entries().await.unwrap().len(), 1);
+        assert_eq!(repository.reminders().await.unwrap().len(), 1);
+
+        // Create backup database file path
+        let backup_db_file = temp_dir.join("hroniki_backup_test.sqlite");
+        if backup_db_file.exists() {
+            let _ = std::fs::remove_file(&backup_db_file);
+        }
+
+        // Force WAL checkpoint to ensure all data is written to main file before VACUUM
+        sqlx::query("PRAGMA wal_checkpoint(TRUNCATE);")
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        // Export via VACUUM INTO
+        sqlx::query(&format!("VACUUM INTO '{}'", backup_db_file.to_string_lossy().replace('\\', "/")))
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        assert!(backup_db_file.exists());
+
+        // Clear all tables
+        sqlx::query("DELETE FROM reminders").execute(&pool).await.unwrap();
+        sqlx::query("DELETE FROM entries").execute(&pool).await.unwrap();
+        sqlx::query("DELETE FROM objects").execute(&pool).await.unwrap();
+        sqlx::query("DELETE FROM categories").execute(&pool).await.unwrap();
+
+        // Verify empty state
+        assert_eq!(repository.categories().await.unwrap().len(), 0);
+        assert_eq!(repository.objects().await.unwrap().len(), 0);
+        assert_eq!(repository.entries().await.unwrap().len(), 0);
+        assert_eq!(repository.reminders().await.unwrap().len(), 0);
+
+        // Restore: close pool, copy file back, reopen pool
+        pool.close().await;
+
+        std::fs::copy(&backup_db_file, &db_file).unwrap();
+
+        let restored_pool = create_pool(&db_url).await.unwrap();
+
+        let restored_repo = SqliteChronologyRepository::new(restored_pool);
+        assert_eq!(restored_repo.categories().await.unwrap().len(), 1);
+        assert_eq!(restored_repo.objects().await.unwrap().len(), 1);
+        assert_eq!(restored_repo.entries().await.unwrap().len(), 1);
+        assert_eq!(restored_repo.reminders().await.unwrap().len(), 1);
+
+        // Clean up
+        let _ = std::fs::remove_file(&backup_db_file);
+        let _ = std::fs::remove_file(&db_file);
+    }
 }
 

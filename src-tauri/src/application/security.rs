@@ -99,4 +99,19 @@ mod tests {
 
         assert_eq!(payload.to_vec(), decrypted);
     }
+
+    #[test]
+    fn test_corrupted_archive_fails_decryption() {
+        let payload = b"Secret chronology backup data";
+        let password = "MySecurePassword123";
+        let mut encrypted = encrypt_data(payload, password).unwrap();
+        
+        // Corrupt one byte of ciphertext (skip salt 16 bytes + nonce 12 bytes = 28)
+        if encrypted.len() > 30 {
+            encrypted[30] ^= 0xFF; 
+        }
+
+        let result = decrypt_data(&encrypted, password);
+        assert!(result.is_err());
+    }
 }
