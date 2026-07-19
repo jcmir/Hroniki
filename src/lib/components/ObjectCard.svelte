@@ -1,32 +1,19 @@
-﻿<script lang="ts">
+<script lang="ts">
   import { fly } from 'svelte/transition';
+  import { getCategoryIcon } from '../utils/categoryIcons';
+  import type { ChronicleObject } from '../types/ChronicleObject';
 
   interface Props {
-    object: any;
+    object: ChronicleObject;
     categoryName?: string;
     entryCount?: number;
     index?: number;
-    onSelect: (obj: any) => void;
+    onSelect: (obj: ChronicleObject) => void;
   }
 
   let { object, categoryName = 'Категория', entryCount = 0, index = 0, onSelect }: Props = $props();
 
-  const CATEGORY_ICONS: Record<string, string> = {
-    'Сад':        '🌿',
-    'Здоровье':   '❤️',
-    'Авто':       '🚗',
-    'Автомобиль': '🚗',
-    'Дом':        '🏠',
-    'Питомцы':    '🐾',
-    'Питомец':    '🐾',
-    'Документы':  '📄',
-    'Спорт':      '🏃',
-    'Работа':     '💼',
-    'Техника':    '💻',
-    'Путешествия':'✈️',
-  };
-
-  const icon = $derived(CATEGORY_ICONS[categoryName] ?? '📦');
+  const icon = $derived(getCategoryIcon(categoryName));
 
   function pluralRu(n: number, one: string, few: string, many: string): string {
     const mod10 = n % 10, mod100 = n % 100;

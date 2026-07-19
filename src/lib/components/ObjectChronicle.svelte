@@ -1,32 +1,22 @@
-﻿<script lang="ts">
+<script lang="ts">
   import { fade, fly } from 'svelte/transition';
   import TimelineCard from './TimelineCard.svelte';
+  import { getCategoryIcon } from '../utils/categoryIcons';
+  import type { ChronicleObject } from '../types/ChronicleObject';
+  import type { ObjectStats } from '../types/ObjectStats';
+  import type { Entry } from '../types/Entry';
+  import type { Category } from '../types/Category';
 
   interface Props {
-    object: any;
-    stats: any | null;
-    entries: any[];
-    categories: any[];
+    object: ChronicleObject;
+    stats: ObjectStats | null;
+    entries: Entry[];
+    categories: Category[];
     onBack: () => void;
     onCardClick: (id: string) => void;
   }
 
   let { object, stats, entries, categories, onBack, onCardClick }: Props = $props();
-
-  const CATEGORY_ICONS: Record<string, string> = {
-    'Сад':        '🌿',
-    'Здоровье':   '❤️',
-    'Авто':       '🚗',
-    'Автомобиль': '🚗',
-    'Дом':        '🏠',
-    'Питомцы':    '🐾',
-    'Питомец':    '🐾',
-    'Документы':  '📄',
-    'Спорт':      '🏃',
-    'Работа':     '💼',
-    'Техника':    '💻',
-    'Путешествия':'✈️',
-  };
 
   function pluralRu(n: number, one: string, few: string, many: string): string {
     const mod10 = n % 10, mod100 = n % 100;
@@ -50,15 +40,15 @@
     return parts.join(' ');
   }
 
-  // Group entries by year of occurred_at, sorted descending
-  function groupByYear(list: any[]): [number, any[]][] {
-    const map: Record<number, any[]> = {};
+  // Group entries by year of occurred_at, sorted ascending
+  function groupByYear(list: Entry[]): [number, Entry[]][] {
+    const map: Record<number, Entry[]> = {};
     for (const e of list) {
       const year = new Date(e.occurred_at ?? e.created_at).getFullYear();
       (map[year] ??= []).push(e);
     }
     return Object.entries(map)
-      .map(([y, es]) => [Number(y), es] as [number, any[]])
+      .map(([y, es]) => [Number(y), es] as [number, Entry[]])
       .sort((a, b) => a[0] - b[0]);
   }
 
@@ -66,8 +56,8 @@
     return new Date(dateStr).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
   }
 
-  const categoryName = $derived(categories.find((c: any) => c.id === object.category_id)?.name ?? 'Объект');
-  const icon = $derived(CATEGORY_ICONS[categoryName] ?? '📦');
+  const categoryName = $derived(categories.find((c: Category) => c.id === object.category_id)?.name ?? 'Объект');
+  const icon = $derived(getCategoryIcon(categoryName));
   const age = $derived(calcAge(object.created_at));
   const yearGroups = $derived(groupByYear(entries));
 
@@ -93,7 +83,16 @@
     <h2 class="object-title">{object.name}</h2>
     <span class="object-category-badge">{icon} {categoryName}</span>
     {#if age}
-      <span class="object-age">{age}</span>
+      <span class="object-age">В архиве: {age}</span>
+    {/if}
+    {#if stats && stats.last_event_title}
+      <div class="object-last-event">
+        <span class="last-event-label">Последнее:</span>
+        <span class="last-event-value">{stats.last_event_title}</span>
+        {#if stats.last_event_date}
+          <span class="last-event-time">({formatDayMonth(stats.last_event_date)})</span>
+        {/if}
+      </div>
     {/if}
     {#if object.description}
       <p class="object-description">{object.description}</p>
@@ -145,22 +144,25 @@
         </div>
       {/if}
 
-      <!-- Year groups -->
-      {#each yearGroups as [year, yearEntries]}
-        <div class="year-group">
-          <div class="year-label">
-            <span class="year-line-left"></span>
+      <!-- Continuous Timeline Container -->
+      <div class="chronicle-timeline-container">
+        <div class="timeline-axis"></div>
+
+        {#each yearGroups as [year, yearEntries]}
+          <div class="year-header">
+            <div class="year-left">
+              <div class="year-circle"></div>
+            </div>
             <span class="year-num">{year}</span>
-            <span class="year-line-right"></span>
           </div>
 
           <div class="year-entries">
-            {#each yearEntries as item (item.id)}
-              <TimelineCard {...item} onClick={onCardClick} />
+            {#each yearEntries as item, i (item.id)}
+              <TimelineCard {...item} index={i} onClick={onCardClick} />
             {/each}
           </div>
-        </div>
-      {/each}
+        {/each}
+      </div>
     {/if}
   </div>
 </div>
@@ -230,6 +232,38 @@
     font-size: 0.82rem;
     color: var(--muted);
     font-weight: 500;
+  }
+
+  .object-last-event {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.8rem;
+    background: rgba(96, 37, 255, 0.05);
+    color: var(--primary-purple);
+    padding: 4px 10px;
+    border-radius: 8px;
+    margin-top: 4px;
+    margin-bottom: 2px;
+    font-weight: 500;
+  }
+
+  .last-event-label {
+    opacity: 0.7;
+    font-weight: 600;
+  }
+
+  .last-event-value {
+    font-weight: 600;
+    max-width: 140px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .last-event-time {
+    font-size: 0.75rem;
+    opacity: 0.8;
   }
 
   .object-description {
@@ -324,39 +358,61 @@
     color: var(--muted);
   }
 
-  /* Year groups */
-  .year-group {
+  /* Continuous Timeline axis & years styling */
+  .chronicle-timeline-container {
+    position: relative;
+    width: 100%;
     display: flex;
     flex-direction: column;
-    margin-bottom: 8px;
   }
 
-  .year-label {
+  .timeline-axis {
+    position: absolute;
+    left: 15px;
+    top: 10px;
+    bottom: 30px;
+    width: 2px;
+    background: linear-gradient(to bottom, var(--light-gray), rgba(0,0,0,0.01));
+    z-index: 1;
+  }
+
+  .year-header {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 16px;
+    margin: 24px 0 16px;
+    position: relative;
+    z-index: 2;
   }
 
-  .year-line-left,
-  .year-line-right {
-    flex: 1;
-    height: 1px;
-    background: var(--light-gray);
+  .year-left {
+    width: 32px;
+    display: flex;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .year-circle {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: var(--primary-purple);
+    box-shadow: 0 0 0 5px var(--background);
   }
 
   .year-num {
-    font-size: 0.8rem;
+    font-size: 1.15rem;
     font-weight: 700;
-    color: var(--muted);
-    letter-spacing: 0.08em;
-    white-space: nowrap;
+    color: var(--text);
+    margin-left: 12px;
+    letter-spacing: -0.02em;
   }
 
   .year-entries {
     display: flex;
     flex-direction: column;
     gap: 0;
+    position: relative;
+    z-index: 2;
   }
 
   /* Empty state */
@@ -384,3 +440,4 @@
     font-weight: 400 !important;
   }
 </style>
+

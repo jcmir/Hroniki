@@ -13,10 +13,16 @@
   import ObjectChronicle from '$lib/components/ObjectChronicle.svelte';
   import { mockInvoke } from '$lib/mock/mockRepository';
 
+  // Explicit Types
+  import type { Category } from '$lib/types/Category';
+  import type { ChronicleObject } from '$lib/types/ChronicleObject';
+  import type { Entry } from '$lib/types/Entry';
+  import type { ObjectStats } from '$lib/types/ObjectStats';
+
   // State variables from DB
-  let categories = $state<any[]>([]);
-  let objects = $state<any[]>([]);
-  let entries = $state<any[]>([]);
+  let categories = $state<Category[]>([]);
+  let objects = $state<ChronicleObject[]>([]);
+  let entries = $state<Entry[]>([]);
   let reminders = $state<any[]>([]);
 
   // Navigation state
@@ -68,10 +74,11 @@
   let showOnboarding = $state(false);
   let currentUsername = $state('Пользователь');
 
-  // Selected object chronicle view state
-  let selectedObjectForChronicle = $state<any>(null);
-  let selectedObjectStats = $state<any>(null);
-  let selectedObjectEntries = $state<any[]>([]);
+  // Selected object chronicle view state and scroll preservation
+  let selectedObjectForChronicle = $state<ChronicleObject | null>(null);
+  let selectedObjectStats = $state<ObjectStats | null>(null);
+  let selectedObjectEntries = $state<Entry[]>([]);
+  let objectsScrollY = 0;
 
   onMount(async () => {
     try {
@@ -184,20 +191,23 @@
     }
   }
 
-  async function selectObjectForChronicle(obj: any) {
+  async function selectObjectForChronicle(obj: ChronicleObject) {
+    objectsScrollY = window.scrollY;
     selectedObjectForChronicle = obj;
     try {
-      selectedObjectStats = await safeInvoke<any>('get_object_stats', { objectId: obj.id });
+      selectedObjectStats = await safeInvoke<ObjectStats>('get_object_stats', { objectId: obj.id });
       selectedObjectEntries = entries.filter(e => e.object_id === obj.id);
     } catch (e) {
       console.error('Failed to get object stats:', e);
     }
+    setTimeout(() => window.scrollTo(0, 0), 10);
   }
 
   function clearObjectChronicle() {
     selectedObjectForChronicle = null;
     selectedObjectStats = null;
     selectedObjectEntries = [];
+    setTimeout(() => window.scrollTo(0, objectsScrollY), 10);
   }
 
   async function refreshData() {
