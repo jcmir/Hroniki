@@ -20,7 +20,7 @@ use crate::{
         adapters::{
             DesktopNotificationPlatform, DesktopPermissionPlatform, MemorySecureStoragePlatform,
         },
-        PlatformContext, PlatformCapabilities,
+        PlatformCapabilities, PlatformContext,
     },
     reminder::{
         DummyNotificationProvider, ReminderScheduler, ReminderService, SqliteReminderRepository,

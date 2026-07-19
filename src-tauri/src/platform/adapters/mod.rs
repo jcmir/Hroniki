@@ -2,7 +2,7 @@ pub mod android;
 pub mod desktop;
 
 pub use android::{
-    AndroidNotificationPlatform, AndroidPermissionPlatform, AndroidSecureStoragePlatform,
+    AndroidLifecyclePlatform, AndroidNotificationPlatform, AndroidSecureStoragePlatform,
 };
 pub use desktop::{
     DesktopNotificationPlatform, DesktopPermissionPlatform, MemorySecureStoragePlatform,

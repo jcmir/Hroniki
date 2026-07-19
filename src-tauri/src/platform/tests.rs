@@ -1,12 +1,65 @@
-use std::sync::Arc;
-use crate::events::EventBus;
-use crate::events::DomainEvent;
+use super::adapters::{
+    android::lifecycle::PlatformLifecycleEvent, AndroidLifecyclePlatform,
+    AndroidSecureStoragePlatform, DesktopNotificationPlatform, DesktopPermissionPlatform,
+    MemorySecureStoragePlatform,
+};
+use super::capabilities::PlatformCapabilities;
 use super::context::PlatformContext;
-use super::storage::{SecretKind, SecretIdentifier, SecureStoragePlatform};
 use super::lifecycle::{LifecycleEvent, LifecycleTranslator};
 use super::permissions::PermissionKind;
-use super::capabilities::PlatformCapabilities;
-use super::adapters::{DesktopNotificationPlatform, MemorySecureStoragePlatform, DesktopPermissionPlatform};
+use super::storage::{SecretIdentifier, SecretKind, SecureStoragePlatform};
+use crate::events::DomainEvent;
+use crate::events::EventBus;
+use std::sync::Arc;
+
+// 1. Storage Contract Verification Helper
+async fn run_storage_contract_test(storage: Arc<dyn SecureStoragePlatform>) {
+    let id_db = SecretIdentifier {
+        kind: SecretKind::DatabaseKey,
+        namespace: "user_contract".to_string(),
+    };
+    let id_token = SecretIdentifier {
+        kind: SecretKind::SessionToken,
+        namespace: "user_contract".to_string(),
+    };
+
+    // Store & Load
+    storage
+        .store(id_db.clone(), b"contract_db_key")
+        .await
+        .unwrap();
+    storage
+        .store(id_token.clone(), b"contract_token")
+        .await
+        .unwrap();
+
+    let loaded_db = storage.load(id_db.clone()).await.unwrap().unwrap();
+    assert_eq!(loaded_db, b"contract_db_key");
+
+    let loaded_token = storage.load(id_token.clone()).await.unwrap().unwrap();
+    assert_eq!(loaded_token, b"contract_token");
+
+    // Delete
+    storage.delete(id_db.clone()).await.unwrap();
+    let loaded_db_post = storage.load(id_db).await.unwrap();
+    assert!(loaded_db_post.is_none());
+
+    // Token must remain unaffected
+    let loaded_token_post = storage.load(id_token).await.unwrap().unwrap();
+    assert_eq!(loaded_token_post, b"contract_token");
+}
+
+#[tokio::test]
+async fn test_memory_storage_contract() {
+    let storage = Arc::new(MemorySecureStoragePlatform::new());
+    run_storage_contract_test(storage).await;
+}
+
+#[tokio::test]
+async fn test_android_storage_contract() {
+    let storage = Arc::new(AndroidSecureStoragePlatform::new());
+    run_storage_contract_test(storage).await;
+}
 
 #[tokio::test]
 async fn test_storage_isolation() {
@@ -25,9 +78,18 @@ async fn test_storage_isolation() {
         namespace: "user_b".to_string(),
     };
 
-    storage.store(id_db.clone(), b"db_secret_key").await.unwrap();
-    storage.store(id_token.clone(), b"token_secret").await.unwrap();
-    storage.store(id_other_user.clone(), b"other_user_db_key").await.unwrap();
+    storage
+        .store(id_db.clone(), b"db_secret_key")
+        .await
+        .unwrap();
+    storage
+        .store(id_token.clone(), b"token_secret")
+        .await
+        .unwrap();
+    storage
+        .store(id_other_user.clone(), b"other_user_db_key")
+        .await
+        .unwrap();
 
     // Verify isolation by Kind
     let loaded_db = storage.load(id_db).await.unwrap().unwrap();
@@ -58,7 +120,10 @@ async fn test_storage_thread_safety() {
             let payload = format!("payload_{}", i);
 
             // 1. Store
-            storage_clone.store(id.clone(), payload.as_bytes()).await.unwrap();
+            storage_clone
+                .store(id.clone(), payload.as_bytes())
+                .await
+                .unwrap();
 
             // 2. Load and verify
             let loaded = storage_clone.load(id.clone()).await.unwrap().unwrap();
@@ -96,6 +161,29 @@ async fn test_lifecycle_event_translation() {
 }
 
 #[tokio::test]
+async fn test_android_lifecycle_event_translation() {
+    let event_bus = Arc::new(EventBus::new());
+    let mut rx = event_bus.subscribe();
+
+    let translator = Arc::new(LifecycleTranslator::new(event_bus.clone()));
+    let android_lifecycle = AndroidLifecyclePlatform::new(translator);
+
+    // Trigger Android-specific OS event Background (onPause)
+    android_lifecycle.handle_os_event(PlatformLifecycleEvent::Background);
+
+    // Verify it maps to DomainEvent::ApplicationSuspended
+    let event = rx.recv().await.unwrap();
+    if let DomainEvent::ApplicationSuspended = event {
+        // Success
+    } else {
+        panic!(
+            "Expected ApplicationSuspended for Android Background event, received {:?}",
+            event
+        );
+    }
+}
+
+#[tokio::test]
 async fn test_unknown_lifecycle_event_translation() {
     let event_bus = Arc::new(EventBus::new());
     let mut rx = event_bus.subscribe();
@@ -124,7 +212,11 @@ async fn test_platform_context_initialization() {
     let context = PlatformContext::new(notifications, storage, permissions, capabilities);
 
     // Call and check permissions
-    let status = context.permissions.check_permission(PermissionKind::Notifications).await.unwrap();
+    let status = context
+        .permissions
+        .check_permission(PermissionKind::Notifications)
+        .await
+        .unwrap();
     assert_eq!(status, super::permissions::PermissionStatus::Granted);
 
     // Verify capabilities

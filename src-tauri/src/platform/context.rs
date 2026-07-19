@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use super::capabilities::PlatformCapabilities;
 use super::notifications::NotificationPlatform;
 use super::permissions::PermissionPlatform;
 use super::storage::SecureStoragePlatform;
-use super::capabilities::PlatformCapabilities;
+use std::sync::Arc;
 
 pub struct PlatformContext {
     pub notifications: Arc<dyn NotificationPlatform>,
