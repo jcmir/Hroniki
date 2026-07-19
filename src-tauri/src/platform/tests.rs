@@ -1,5 +1,8 @@
-use super::adapters::android::backend::{KeyStoreBackend, KeyStoreError, MemoryKeyStoreBackend};
+use super::adapters::android::backend::{
+    KeyStoreBackend, KeyStoreError, MemoryKeyStoreBackend, JniKeyStoreBackend, KeyStoreState, JniBridge,
+};
 use super::adapters::android::storage::WrappedSecret;
+use async_trait::async_trait;
 use super::adapters::{
     android::lifecycle::PlatformLifecycleEvent, AndroidLifecyclePlatform,
     AndroidSecureStoragePlatform, DesktopNotificationPlatform, DesktopPermissionPlatform,
@@ -384,4 +387,65 @@ async fn test_platform_context_initialization() {
     // Verify capabilities
     assert!(context.capabilities.notifications);
     assert!(!context.capabilities.biometric);
+}
+
+// Mock JNI Bridge for testing
+struct TestJniBridge {
+    memory_backend: MemoryKeyStoreBackend,
+}
+
+impl TestJniBridge {
+    fn new() -> Self {
+        Self {
+            memory_backend: MemoryKeyStoreBackend::new(),
+        }
+    }
+}
+
+#[async_trait]
+impl JniBridge for TestJniBridge {
+    async fn encrypt_via_jni(&self, plaintext: &[u8]) -> Result<WrappedSecret, KeyStoreError> {
+        self.memory_backend.wrap_key(plaintext).await
+    }
+
+    async fn decrypt_via_jni(&self, secret: &WrappedSecret) -> Result<Vec<u8>, KeyStoreError> {
+        self.memory_backend.unwrap_key(secret).await
+    }
+}
+
+#[tokio::test]
+async fn test_jni_backend_uninitialized() {
+    let bridge = Arc::new(TestJniBridge::new());
+    let jni_backend = JniKeyStoreBackend::new(bridge);
+
+    // Initial state is Uninitialized -> wrap/unwrap must fail with BackendUnavailable
+    let result = jni_backend.wrap_key(b"test").await;
+    assert_eq!(result.unwrap_err(), KeyStoreError::BackendUnavailable);
+
+    let dummy_secret = WrappedSecret {
+        version: 1,
+        algorithm: "AES-GCM-NoPadding".to_string(),
+        nonce: vec![0u8; 12],
+        ciphertext: vec![1, 2, 3],
+        tag: vec![0u8; 16],
+    };
+    let result_decrypt = jni_backend.unwrap_key(&dummy_secret).await;
+    assert_eq!(result_decrypt.unwrap_err(), KeyStoreError::BackendUnavailable);
+
+    // Failed state -> wrap/unwrap must fail with BackendUnavailable
+    jni_backend.set_state(KeyStoreState::Failed("TEE error".to_string())).await;
+    let result_fail = jni_backend.wrap_key(b"test").await;
+    assert_eq!(result_fail.unwrap_err(), KeyStoreError::BackendUnavailable);
+}
+
+#[tokio::test]
+async fn test_jni_backend_contract() {
+    let bridge = Arc::new(TestJniBridge::new());
+    let jni_backend = Arc::new(JniKeyStoreBackend::new(bridge));
+
+    // Set state to Ready to execute contract
+    jni_backend.set_state(KeyStoreState::Ready).await;
+
+    let storage = Arc::new(AndroidSecureStoragePlatform::new(jni_backend));
+    run_storage_contract_test(storage).await;
 }

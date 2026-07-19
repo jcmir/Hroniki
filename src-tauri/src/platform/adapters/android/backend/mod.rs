@@ -16,6 +16,13 @@ impl EncryptionAlgorithm {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KeyStoreState {
+    Uninitialized,
+    Ready,
+    Failed(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KeyStoreError {
     InvalidVersion(u32),
     EncryptionFailed,
@@ -44,6 +51,13 @@ impl std::error::Error for KeyStoreError {}
 pub trait KeyStoreBackend: Send + Sync {
     async fn wrap_key(&self, plaintext: &[u8]) -> Result<WrappedSecret, KeyStoreError>;
     async fn unwrap_key(&self, secret: &WrappedSecret) -> Result<Vec<u8>, KeyStoreError>;
+}
+
+/// JniBridge abstracts raw JNI calls so desktop builds can mock them during tests.
+#[async_trait]
+pub trait JniBridge: Send + Sync {
+    async fn encrypt_via_jni(&self, plaintext: &[u8]) -> Result<WrappedSecret, KeyStoreError>;
+    async fn decrypt_via_jni(&self, secret: &WrappedSecret) -> Result<Vec<u8>, KeyStoreError>;
 }
 
 pub mod jni;
