@@ -1,5 +1,5 @@
 use crate::domain::{EntryId, MediaSource, Photo};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 pub struct MediaService {
     base_dir: PathBuf,

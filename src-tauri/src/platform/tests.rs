@@ -976,7 +976,7 @@ async fn test_session_verifier_argon2id_roundtrip() {
 
 #[tokio::test]
 async fn test_media_missing_file_handling() {
-    use crate::domain::{ChronicleObjectId, EntryId, MediaSource, Photo};
+    use crate::domain::{EntryId, MediaSource, Photo};
 
     let entry_id = EntryId::new();
     let photo = Photo::with_source(
@@ -1043,7 +1043,7 @@ async fn test_lockout_survives_restart() {
 
 #[tokio::test]
 async fn test_full_mobile_lifecycle() {
-    use crate::domain::{Category, ChronicleObject, Entry, MediaSource, Photo};
+    use crate::domain::{Category, ChronicleObject, Entry, MediaSource};
     use crate::media::MediaService;
     use crate::storage::{
         connection::create_pool, migrations::run_migrations, ChronologyRepository,
@@ -1052,6 +1052,7 @@ async fn test_full_mobile_lifecycle() {
 
     let temp_dir =
         std::env::temp_dir().join(format!("hroniki_lifecycle_test_{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&temp_dir).unwrap();
     let db_path = temp_dir.join("hroniki.sqlite");
     let db_url = format!("sqlite://{}", db_path.to_string_lossy().replace('\\', "/"));
 
