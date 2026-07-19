@@ -749,5 +749,76 @@ mod tests {
         let err_msg = result.unwrap_err();
         assert!(err_msg.contains("FOREIGN KEY constraint failed") || err_msg.contains("foreign key constraint failed"));
     }
+
+    #[tokio::test]
+    async fn save_entry_with_photos_rolls_back_on_failure() {
+        let pool = create_pool("sqlite::memory:").await.unwrap();
+        run_migrations(&pool).await.unwrap();
+        let mut repository = SqliteChronologyRepository::new(pool);
+
+        let category = Category::new("Garden").unwrap();
+        repository.save_category(category.clone()).await.unwrap();
+
+        let object = ChronicleObject::new(category.id, "Apple tree", None).unwrap();
+        repository.save_object(object.clone()).await.unwrap();
+
+        let entry = Entry::new(object.id, Utc::now(), "Treatment", None).unwrap();
+
+        // Create a photo that violates foreign key constraint (non-existent entry id)
+        let invalid_entry_id = crate::domain::EntryId::from(uuid::Uuid::new_v4());
+        let invalid_photo = Photo::new(invalid_entry_id, "ghost.jpg", "ghost.jpg");
+
+        // Try to save both - this should fail since the photo has an invalid entry id
+        let result = repository.save_entry_with_photos(entry.clone(), vec![invalid_photo]).await;
+        assert!(result.is_err());
+
+        // Verify that the entry WAS NOT saved (transaction rolled back)
+        let entries = repository.entries().await.unwrap();
+        assert!(entries.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_reminder_scheduler_claim_logic() {
+        let pool = create_pool("sqlite::memory:").await.unwrap();
+        run_migrations(&pool).await.unwrap();
+        let mut repository = SqliteChronologyRepository::new(pool.clone());
+
+        let category = Category::new("Garden").unwrap();
+        repository.save_category(category.clone()).await.unwrap();
+
+        let object = ChronicleObject::new(category.id, "Apple tree", None).unwrap();
+        repository.save_object(object.clone()).await.unwrap();
+
+        let entry = Entry::new(object.id, Utc::now(), "Treatment", None).unwrap();
+        repository.save_entry(entry.clone()).await.unwrap();
+
+        let trigger = Utc::now() - chrono::Duration::seconds(10); // in the past
+        let reminder = Reminder::new(entry.id.clone(), trigger, Some(14));
+        repository.save_reminder(reminder.clone()).await.unwrap();
+
+        // Simulate scheduler query
+        let reminders = repository.reminders().await.unwrap();
+        assert_eq!(reminders.len(), 1);
+        let target = &reminders[0];
+        assert_eq!(target.status, "Scheduled");
+
+        // Try to claim it
+        let update_res = sqlx::query("UPDATE reminders SET status = 'Triggered' WHERE id = ? AND status = 'Scheduled'")
+            .bind(target.id.value().to_string())
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        assert_eq!(update_res.rows_affected(), 1);
+
+        // Try to claim it again (should affect 0 rows)
+        let update_res_again = sqlx::query("UPDATE reminders SET status = 'Triggered' WHERE id = ? AND status = 'Scheduled'")
+            .bind(target.id.value().to_string())
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        assert_eq!(update_res_again.rows_affected(), 0);
+    }
 }
 

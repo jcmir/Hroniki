@@ -5,7 +5,7 @@ use sqlx::SqlitePool;
 use tauri::Manager;
 
 pub async fn initialize_application<R>(
-    service: &mut ChronologyService<R>,
+    _service: &mut ChronologyService<R>,
     pool: &SqlitePool,
     app: &tauri::AppHandle,
 ) -> Result<(), String>
@@ -34,15 +34,43 @@ where
     };
 
     if !is_seeded {
-        // Seed default categories
-        service.create_category("Сад").await.map_err(|e| e.to_string())?;
-        service.create_category("Здоровье").await.map_err(|e| e.to_string())?;
-        service.create_category("Авто").await.map_err(|e| e.to_string())?;
+        let mut tx = pool.begin().await.map_err(|e| e.to_string())?;
 
-        sqlx::query("INSERT INTO app_metadata (key, value) VALUES ('default_seed_version', '1')")
-            .execute(pool)
+        let garden_id = uuid::Uuid::new_v4().to_string();
+        let health_id = uuid::Uuid::new_v4().to_string();
+        let auto_id = uuid::Uuid::new_v4().to_string();
+        let now_str = chrono::Utc::now().to_rfc3339();
+
+        sqlx::query("INSERT INTO categories (id, name, created_at) VALUES (?, ?, ?)")
+            .bind(garden_id)
+            .bind("Сад")
+            .bind(&now_str)
+            .execute(&mut *tx)
             .await
             .map_err(|e| e.to_string())?;
+
+        sqlx::query("INSERT INTO categories (id, name, created_at) VALUES (?, ?, ?)")
+            .bind(health_id)
+            .bind("Здоровье")
+            .bind(&now_str)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        sqlx::query("INSERT INTO categories (id, name, created_at) VALUES (?, ?, ?)")
+            .bind(auto_id)
+            .bind("Авто")
+            .bind(&now_str)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        sqlx::query("INSERT INTO app_metadata (key, value) VALUES ('default_seed_version', '1')")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        tx.commit().await.map_err(|e| e.to_string())?;
     }
 
     Ok(())
@@ -73,8 +101,10 @@ pub async fn cleanup_orphan_media(
                         if let Some(filename_os) = path.file_name() {
                             let filename = filename_os.to_string_lossy().into_owned();
                             if !db_photo_filenames.contains(&filename) {
-                                // Delete orphan file
-                                let _ = std::fs::remove_file(&path);
+                                // Delete orphan file and log error if failed
+                                if let Err(e) = std::fs::remove_file(&path) {
+                                    eprintln!("Warning: Failed to remove orphan file {:?}: {}", path, e);
+                                }
                             }
                         }
                     }
@@ -107,19 +137,25 @@ pub fn start_reminder_scheduler(pool: SqlitePool, app_handle: tauri::AppHandle) 
 
             if let Ok(reminders) = reminders_res {
                 for (reminder_id, _entry_id, title) in reminders {
-                    // Send notification
-                    use tauri_plugin_notification::NotificationExt;
-                    let _ = app_handle.notification()
-                        .builder()
-                        .title("ХРОНИКИ — Напоминание")
-                        .body(format!("Пора вернуться к истории: {}", title))
-                        .show();
+                    // Try to atomically claim/update the reminder first
+                    let update_res = sqlx::query(
+                        "UPDATE reminders SET status = 'Triggered' WHERE id = ? AND status = 'Scheduled'"
+                    )
+                    .bind(&reminder_id)
+                    .execute(&pool)
+                    .await;
 
-                    // Update status in DB
-                    let _ = sqlx::query("UPDATE reminders SET status = 'Triggered' WHERE id = ?")
-                        .bind(reminder_id)
-                        .execute(&pool)
-                        .await;
+                    if let Ok(result) = update_res {
+                        if result.rows_affected() == 1 {
+                            // Send notification only if we won the race
+                            use tauri_plugin_notification::NotificationExt;
+                            let _ = app_handle.notification()
+                                .builder()
+                                .title("ХРОНИКИ — Напоминание")
+                                .body(format!("Пора вернуться к истории: {}", title))
+                                .show();
+                        }
+                    }
                 }
             }
         }
