@@ -159,6 +159,19 @@
     display: flex;
     flex-direction: column;
     width: 100%;
+    animation: zoomIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    transform-origin: top center;
+  }
+
+  @keyframes zoomIn {
+    from {
+      opacity: 0;
+      transform: scale(0.96) translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
   }
 
   .back-link-btn {

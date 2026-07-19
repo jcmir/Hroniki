@@ -1,6 +1,7 @@
 <script lang="ts">
   import { fade, scale } from 'svelte/transition';
   import { onDestroy } from 'svelte';
+  import Logo from './Logo.svelte';
 
   interface Props {
     onVerify: (pin: string) => Promise<boolean>;
@@ -86,20 +87,7 @@
     <!-- Logo / Branding -->
     <div class="lock-brand" in:fade={{ duration: 600, delay: 100 }}>
       <div class="brand-icon">
-        <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" width="40" height="40">
-          <circle cx="20" cy="20" r="18" stroke="url(#g1)" stroke-width="2.5" fill="none"/>
-          <path d="M13 20 Q20 12 27 20 Q20 28 13 20Z" fill="url(#g2)" opacity="0.9"/>
-          <defs>
-            <linearGradient id="g1" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stop-color="#a78bfa"/>
-              <stop offset="100%" stop-color="#6d28d9"/>
-            </linearGradient>
-            <linearGradient id="g2" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stop-color="#c4b5fd"/>
-              <stop offset="100%" stop-color="#7c3aed"/>
-            </linearGradient>
-          </defs>
-        </svg>
+        <Logo size={60} />
       </div>
       <span class="brand-name">ХРОНИКИ</span>
     </div>

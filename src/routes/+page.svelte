@@ -11,6 +11,7 @@
   import OnboardingScreen from '$lib/components/OnboardingScreen.svelte';
   import ObjectCard from '$lib/components/ObjectCard.svelte';
   import ObjectChronicle from '$lib/components/ObjectChronicle.svelte';
+  import Logo from '$lib/components/Logo.svelte';
   import { mockInvoke } from '$lib/mock/mockRepository';
 
   // Explicit Types
@@ -421,7 +422,7 @@
   <!-- Header bar -->
   <header class="app-header">
     <div class="header-logo">
-      <span class="logo-spark">✨</span>
+      <Logo size={24} />
       <h1>Хроника {currentUsername}</h1>
     </div>
     <div class="header-actions">
@@ -972,9 +973,6 @@
     gap: 8px;
   }
 
-  .logo-spark {
-    font-size: 1.4rem;
-  }
 
   .app-header h1 {
     font-size: 1.25rem;

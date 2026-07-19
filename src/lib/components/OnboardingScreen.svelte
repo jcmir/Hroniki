@@ -1,5 +1,6 @@
 <script lang="ts">
   import { fade, slide } from 'svelte/transition';
+  import Logo from './Logo.svelte';
 
   interface Props {
     onComplete: (username: string) => void;
@@ -77,7 +78,9 @@
   <div class="onboarding-card">
     {#if step === 1}
       <div class="step-content text-center" in:fade={{ duration: 200 }}>
-        <span class="logo-spark">🌱</span>
+        <div class="logo-wrapper">
+          <Logo size={80} />
+        </div>
         <h1 class="logo-title">ХРОНИКИ</h1>
         <p class="tagline">Ваша личная история. События. Фото. Объекты.</p>
         <p class="tagline-sub">Всё локально, приватно и в одном месте.</p>
@@ -216,10 +219,10 @@
     align-items: center;
   }
 
-  .logo-spark {
-    font-size: 4rem;
-    display: block;
-    margin-bottom: 8px;
+  .logo-wrapper {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 16px;
   }
 
   .logo-title {
