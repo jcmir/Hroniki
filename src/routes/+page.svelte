@@ -68,9 +68,10 @@
   let importPasswordInput = $state('');
   let isPinEnabled = $state(false);
 
-  // Onboarding states
+  // Onboarding & Splash states
   let showOnboarding = $state(false);
   let currentUsername = $state('Пользователь');
+  let isSplashing = $state(true);
 
   // Selected object chronicle view state and scroll preservation
   let selectedObjectForChronicle = $state<ChronicleObject | null>(null);
@@ -96,6 +97,9 @@
       console.error('Failed to query startup configurations:', e);
     }
     await refreshData();
+    setTimeout(() => {
+      isSplashing = false;
+    }, 2000);
   });
 
   async function handleOnboardingComplete(name: string) {
@@ -930,20 +934,67 @@
   {/if}
 
   <!-- Pin Lock Screen Overlay -->
-  {#if isAppLocked}
+  {#if isAppLocked && !isSplashing}
     <PinLockScreen onVerify={handleVerifyPin} onSuccess={() => isAppLocked = false} />
   {/if}
   <!-- Onboarding Screen Overlay -->
-  {#if showOnboarding}
+  {#if showOnboarding && !isSplashing}
     <OnboardingScreen
       onComplete={handleOnboardingComplete}
       onSeedDemo={handleSeedDemoData}
       onSetPin={handleSetupNewPin}
     />
   {/if}
+  <!-- Splash Screen Overlay -->
+  {#if isSplashing}
+    <div class="splash-screen" transition:fade={{ duration: 400 }}>
+      <div class="splash-content">
+        <Logo size={110} />
+        <h1 class="splash-title">ХРОНИКИ</h1>
+        <p class="splash-subtitle">Ваша личная история</p>
+      </div>
+    </div>
+  {/if}
 </main>
 
 <style>
+  .splash-screen {
+    position: fixed;
+    inset: 0;
+    background: #090810;
+    z-index: 10000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+  }
+
+  .splash-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    text-align: center;
+  }
+
+  .splash-title {
+    font-size: 2.2rem;
+    font-weight: 800;
+    letter-spacing: 3px;
+    background: linear-gradient(135deg, #a855f7, #6366f1);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 2px;
+  }
+
+  .splash-subtitle {
+    font-size: 1rem;
+    color: var(--muted);
+    font-weight: 500;
+    letter-spacing: 1px;
+  }
+
   .app-shell {
     display: flex;
     flex-direction: column;
