@@ -218,6 +218,59 @@ impl IdentityRepository for SqliteIdentityRepository {
     }
 }
 
+#[async_trait]
+impl crate::features::repository::SubscriptionRepository for SqliteIdentityRepository {
+    async fn get_user_plan(&self, user_id: &str) -> Result<crate::features::models::SubscriptionPlan, IdentityError> {
+        let row = sqlx::query(
+            r#"
+            SELECT plan
+            FROM subscriptions
+            WHERE user_id = ? AND status = 'Active'
+            "#,
+        )
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| IdentityError::Storage(e.to_string()))?;
+
+        if let Some(r) = row {
+            let plan_str: String = r.try_get("plan").map_err(|e| IdentityError::Storage(e.to_string()))?;
+            Ok(crate::features::models::SubscriptionPlan::from_str(&plan_str))
+        } else {
+            Ok(crate::features::models::SubscriptionPlan::Free)
+        }
+    }
+
+    async fn set_user_plan(&self, user_id: &str, plan: crate::features::models::SubscriptionPlan) -> Result<(), IdentityError> {
+        sqlx::query(
+            r#"
+            INSERT INTO subscriptions
+            (
+                user_id,
+                plan,
+                status,
+                updated_at
+            )
+            VALUES
+            (?, ?, 'Active', ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                plan = excluded.plan,
+                status = 'Active',
+                updated_at = excluded.updated_at
+            "#,
+        )
+        .bind(user_id)
+        .bind(plan.as_str())
+        .bind(Utc::now().to_rfc3339())
+        .execute(&self.pool)
+        .await
+        .map_err(|e| IdentityError::Storage(e.to_string()))?;
+
+        Ok(())
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
