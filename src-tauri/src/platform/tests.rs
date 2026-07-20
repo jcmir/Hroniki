@@ -501,18 +501,18 @@ async fn test_lifecycle_callback_without_registration() {
     // Calling JNI lifecycle callbacks before registration should not panic.
     // They should gracefully print a warning in the logs and exit.
     use super::adapters::android::lifecycle::{
-        Java_com_hroniki_app_LifecycleBridge_onLocked,
-        Java_com_hroniki_app_LifecycleBridge_onPause,
-        Java_com_hroniki_app_LifecycleBridge_onResume,
+        Java_app_hroniki_mobile_LifecycleBridge_onLocked,
+        Java_app_hroniki_mobile_LifecycleBridge_onPause,
+        Java_app_hroniki_mobile_LifecycleBridge_onResume,
     };
 
     let dummy_env = std::ptr::null_mut();
     let dummy_class = std::ptr::null_mut();
 
     // Call callbacks.
-    Java_com_hroniki_app_LifecycleBridge_onPause(dummy_env, dummy_class);
-    Java_com_hroniki_app_LifecycleBridge_onResume(dummy_env, dummy_class);
-    Java_com_hroniki_app_LifecycleBridge_onLocked(dummy_env, dummy_class);
+    Java_app_hroniki_mobile_LifecycleBridge_onPause(dummy_env, dummy_class);
+    Java_app_hroniki_mobile_LifecycleBridge_onResume(dummy_env, dummy_class);
+    Java_app_hroniki_mobile_LifecycleBridge_onLocked(dummy_env, dummy_class);
 
     // Success: did not panic.
 }

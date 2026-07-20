@@ -1,4 +1,4 @@
-package com.hroniki.app
+package app.hroniki.mobile
 
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties

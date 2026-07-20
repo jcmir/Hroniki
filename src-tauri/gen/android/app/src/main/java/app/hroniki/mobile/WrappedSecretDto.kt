@@ -1,4 +1,4 @@
-package com.hroniki.app
+package app.hroniki.mobile
 
 import androidx.annotation.Keep
 

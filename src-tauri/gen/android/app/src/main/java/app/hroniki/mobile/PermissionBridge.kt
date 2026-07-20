@@ -1,4 +1,4 @@
-package com.hroniki.app
+package app.hroniki.mobile
 
 import android.Manifest
 import android.content.Context

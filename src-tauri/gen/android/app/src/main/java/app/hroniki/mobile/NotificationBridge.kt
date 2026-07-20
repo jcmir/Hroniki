@@ -1,4 +1,4 @@
-package com.hroniki.app
+package app.hroniki.mobile
 
 import android.app.NotificationChannel
 import android.app.NotificationManager

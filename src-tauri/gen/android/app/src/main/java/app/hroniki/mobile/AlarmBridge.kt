@@ -1,4 +1,4 @@
-package com.hroniki.app
+package app.hroniki.mobile
 
 import android.app.AlarmManager
 import android.app.PendingIntent
@@ -9,7 +9,7 @@ import androidx.annotation.Keep
 
 @Keep
 object AlarmBridge {
-    const val ACTION_TRIGGER_REMINDER = "com.hroniki.app.ACTION_TRIGGER_REMINDER"
+    const val ACTION_TRIGGER_REMINDER = "app.hroniki.mobile.ACTION_TRIGGER_REMINDER"
 
     fun scheduleExactAlarm(context: Context, alarmId: String, triggerAtMs: Long, title: String, body: String?) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager

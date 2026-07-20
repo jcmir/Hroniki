@@ -57,7 +57,7 @@ type JniEnvPtr = *mut std::ffi::c_void;
 type JClassPtr = *mut std::ffi::c_void;
 
 #[no_mangle]
-pub extern "system" fn Java_com_hroniki_app_LifecycleBridge_onPause(
+pub extern "system" fn Java_app_hroniki_mobile_LifecycleBridge_onPause(
     _env: JniEnvPtr,
     _class: JClassPtr,
 ) {
@@ -69,7 +69,7 @@ pub extern "system" fn Java_com_hroniki_app_LifecycleBridge_onPause(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_hroniki_app_LifecycleBridge_onResume(
+pub extern "system" fn Java_app_hroniki_mobile_LifecycleBridge_onResume(
     _env: JniEnvPtr,
     _class: JClassPtr,
 ) {
@@ -81,7 +81,7 @@ pub extern "system" fn Java_com_hroniki_app_LifecycleBridge_onResume(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_hroniki_app_LifecycleBridge_onDestroy(
+pub extern "system" fn Java_app_hroniki_mobile_LifecycleBridge_onDestroy(
     _env: JniEnvPtr,
     _class: JClassPtr,
 ) {
@@ -93,7 +93,7 @@ pub extern "system" fn Java_com_hroniki_app_LifecycleBridge_onDestroy(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_hroniki_app_LifecycleBridge_onTrimMemory(
+pub extern "system" fn Java_app_hroniki_mobile_LifecycleBridge_onTrimMemory(
     _env: JniEnvPtr,
     _class: JClassPtr,
 ) {
@@ -105,7 +105,7 @@ pub extern "system" fn Java_com_hroniki_app_LifecycleBridge_onTrimMemory(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_com_hroniki_app_LifecycleBridge_onLocked(
+pub extern "system" fn Java_app_hroniki_mobile_LifecycleBridge_onLocked(
     _env: JniEnvPtr,
     _class: JClassPtr,
 ) {
