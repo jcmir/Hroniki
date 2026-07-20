@@ -27,12 +27,7 @@ pub async fn export_archive(
     }
 
     // 1. Show save dialog to let user select save path
-    let file_path = rfd::FileDialog::new()
-        .add_filter("Hroniki Backup (*.hroniki)", &["hroniki"])
-        .set_file_name("hroniki_backup.hroniki")
-        .save_file();
-
-    let target_path = match file_path {
+    let target_path = match pick_export_path()? {
         Some(path) => path,
         None => return Ok("Export cancelled".to_string()),
     };
@@ -129,11 +124,7 @@ pub async fn import_archive(
     }
 
     // 1. Select backup file
-    let file_path = rfd::FileDialog::new()
-        .add_filter("Hroniki Backup (*.hroniki)", &["hroniki"])
-        .pick_file();
-
-    let backup_path = match file_path {
+    let backup_path = match pick_import_path()? {
         Some(path) => path,
         None => return Err("No file selected".to_string()),
     };
@@ -220,4 +211,31 @@ pub async fn import_archive(
     *service = ChronologyService::new(repository);
 
     Ok(())
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn pick_export_path() -> Result<Option<std::path::PathBuf>, String> {
+    let file_path = rfd::FileDialog::new()
+        .add_filter("Hroniki Backup (*.hroniki)", &["hroniki"])
+        .set_file_name("hroniki_backup.hroniki")
+        .save_file();
+    Ok(file_path)
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+fn pick_export_path() -> Result<Option<std::path::PathBuf>, String> {
+    Err("Native mobile file dialog is not connected yet".to_string())
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+fn pick_import_path() -> Result<Option<std::path::PathBuf>, String> {
+    let file_path = rfd::FileDialog::new()
+        .add_filter("Hroniki Backup (*.hroniki)", &["hroniki"])
+        .pick_file();
+    Ok(file_path)
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+fn pick_import_path() -> Result<Option<std::path::PathBuf>, String> {
+    Err("Native mobile file dialog is not connected yet".to_string())
 }

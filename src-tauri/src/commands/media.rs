@@ -2,6 +2,11 @@ use tauri::Manager;
 
 #[tauri::command]
 pub async fn select_images() -> Result<Option<Vec<String>>, String> {
+    select_images_impl().await
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+async fn select_images_impl() -> Result<Option<Vec<String>>, String> {
     let files = tauri::async_runtime::spawn_blocking(move || {
         rfd::FileDialog::new()
             .add_filter("Images", &["jpg", "jpeg", "png", "webp", "gif"])
@@ -20,6 +25,11 @@ pub async fn select_images() -> Result<Option<Vec<String>>, String> {
         }
         None => Ok(None),
     }
+}
+
+#[cfg(any(target_os = "android", target_os = "ios"))]
+async fn select_images_impl() -> Result<Option<Vec<String>>, String> {
+    Err("Native mobile image picker is not connected yet".to_string())
 }
 
 #[tauri::command]
