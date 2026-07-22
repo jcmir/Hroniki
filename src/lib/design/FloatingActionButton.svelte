@@ -14,9 +14,9 @@
 <style>
   .fab-button {
     position: fixed;
-    bottom: 2rem;
-    right: 1.5rem;
-    z-index: 90;
+    bottom: calc(var(--bottom-total-offset) + 1.5rem);
+    right: calc(var(--safe-area-right) + 1.5rem);
+    z-index: 600;
     width: 60px;
     height: 60px;
     border-radius: var(--radius-pill);

@@ -1,63 +1,15 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import '../app.css';
   import { entriesStore, entriesByDate } from '$lib/stores/entries';
-  import { sessionStore } from '$lib/stores/session';
-  import { platformStore } from '$lib/stores/platform';
-  import { categoriesStore } from '$lib/stores/categories';
-  import CreateEntryModal from '$lib/components/CreateEntryModal.svelte';
-  import PINLockModal from '$lib/components/PINLockModal.svelte';
   import FilterBar from '$lib/components/FilterBar.svelte';
   import MemoryRepeatBanner from '$lib/components/MemoryRepeatBanner.svelte';
-  import SplashScreen from '$lib/components/SplashScreen.svelte';
-  import FirstRunWizard from '$lib/components/FirstRunWizard.svelte';
   import DateChip from '$lib/design/DateChip.svelte';
   import TimelineEntry from '$lib/design/TimelineEntry.svelte';
   import EmptyState from '$lib/design/EmptyState.svelte';
-  import FloatingActionButton from '$lib/design/FloatingActionButton.svelte';
 
-  let showCreateModal = false;
-  let showSplash = true;
-  let showWizard = false;
-
-  onMount(async () => {
-    await sessionStore.init();
-    await platformStore.loadCapabilities();
-    await categoriesStore.loadCategories();
-    await entriesStore.loadEntries();
-    // Show first-run wizard if app is fresh
-    if ($entriesStore.entries.length === 0) {
-      showWizard = true;
-    }
-  });
-
-  function handleLockApp() {
-    sessionStore.lock();
-  }
+  // No need for local modal state or store init, handled by +layout.svelte
 </script>
 
-<div class="journal-app">
-  <!-- Top Bar -->
-  <header class="app-bar">
-    <div class="bar-title">
-      <span class="brand-icon">📖</span>
-      <div class="brand-text">
-        <h1>ХРОНИКИ</h1>
-        <span class="sub-text">Архив Воспоминаний</span>
-      </div>
-      <span class="version-chip">Beta 0.2.1</span>
-    </div>
-
-    <!-- Navigation Tabs -->
-    <nav class="nav-tabs">
-      <a href="/" class="tab-link active">Лента</a>
-      <a href="/objects" class="tab-link">Объекты</a>
-      <a href="/reminders" class="tab-link">Напоминания</a>
-      <a href="/settings" class="tab-link">Настройки</a>
-    </nav>
-  </header>
-
-  <!-- Main Timeline Container -->
+<div class="timeline-page">
   <main class="timeline-content">
     <FilterBar />
 
@@ -79,7 +31,6 @@
       <EmptyState
         title="Ваш Дневник Пока Пуст"
         description="Сохраняйте ценные моменты, жизненные объекты и фотографии."
-        on:action={() => (showCreateModal = true)}
       />
     {:else}
       <div class="timeline-list">
@@ -97,116 +48,20 @@
       </div>
     {/if}
   </main>
-
-  <FloatingActionButton on:click={() => (showCreateModal = true)} />
-
-  <!-- Modals -->
-  {#if showCreateModal}
-    <CreateEntryModal on:close={() => (showCreateModal = false)} />
-  {/if}
-
-  {#if $sessionStore.isLocked}
-    <PINLockModal />
-  {/if}
 </div>
 
-{#if showSplash}
-  <SplashScreen on:done={() => (showSplash = false)} />
-{/if}
-
-{#if showWizard && !showSplash}
-  <FirstRunWizard on:complete={() => (showWizard = false)} />
-{/if}
-
 <style>
-  .journal-app {
-    min-height: 100vh;
-    background-color: var(--bg-app);
-    color: var(--text-main);
-    display: flex;
-    flex-direction: column;
-    position: relative;
-    padding-bottom: 5rem;
-  }
-
-  .app-bar {
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    background-color: var(--bg-glass);
-    backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--border-subtle);
-    padding: 1rem 1.25rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .bar-title {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-  }
-
-  .brand-icon {
-    font-size: 1.5rem;
-  }
-
-  .brand-text h1 {
-    font-family: var(--font-heading);
-    font-size: 1.15rem;
-    font-weight: 700;
-    color: var(--text-main);
-    line-height: 1.1;
-  }
-
-  .sub-text {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-  }
-
-  .version-chip {
-    font-size: 0.7rem;
-    font-weight: 600;
-    color: var(--accent-primary);
-    background-color: rgba(124, 58, 237, 0.1);
-    border: 1px solid var(--border-accent);
-    padding: 0.15rem 0.5rem;
-    border-radius: var(--radius-pill);
-    margin-left: 0.4rem;
-  }
-
-  .nav-tabs {
-    display: flex;
-    gap: 0.4rem;
-    background-color: rgba(23, 23, 23, 0.05);
-    padding: 0.2rem;
-    border-radius: var(--radius-pill);
-  }
-
-  .tab-link {
-    text-decoration: none;
-    font-size: 0.825rem;
-    font-weight: 500;
-    color: var(--text-muted);
-    padding: 0.35rem 0.85rem;
-    border-radius: var(--radius-pill);
-    transition: all 0.2s ease;
-  }
-
-  .tab-link.active {
-    background-color: #FFF;
-    color: var(--accent-primary);
-    font-weight: 600;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  }
-
-  .timeline-content {
-    flex: 1;
+  .timeline-page {
     width: 100%;
     max-width: 640px;
     margin: 0 auto;
     padding: 1.25rem 1rem;
+  }
+
+  .timeline-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
   }
 
   .date-group {
@@ -217,6 +72,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.85rem;
+    margin-top: 1rem;
   }
 
   .state-container {

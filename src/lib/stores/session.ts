@@ -2,7 +2,7 @@ import { writable } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
-export type SessionState = 'active' | 'locked' | 'awaitingUnlock';
+export type SessionState = 'initializing' | 'pinNotConfigured' | 'unlocked' | 'locked' | 'error';
 
 export interface SessionStoreData {
     state: SessionState;
@@ -13,39 +13,58 @@ export interface SessionStoreData {
 
 function createSessionStore() {
     const { subscribe, set, update } = writable<SessionStoreData>({
-        state: 'active',
+        state: 'initializing',
         isLocked: false,
-        isPinConfigured: true,
+        isPinConfigured: false,
         error: null,
     });
+
+    let initPromise: Promise<void> | null = null;
+    let listenersSet = false;
 
     return {
         subscribe,
 
         async init() {
-            try {
-                const configured = await invoke<boolean>('is_pin_configured');
-                update(s => ({
-                    ...s,
-                    isPinConfigured: configured,
-                    isLocked: configured,
-                    state: configured ? 'locked' : 'active',
-                }));
+            if (initPromise) return initPromise;
 
-                await listen('session:locked', () => {
-                    update(s => ({ ...s, state: 'locked', isLocked: true }));
-                });
+            initPromise = (async () => {
+                try {
+                    const configured = await invoke<boolean>('is_pin_configured');
 
-                await listen('session:auth_required', () => {
-                    update(s => ({ ...s, state: 'awaitingUnlock', isLocked: true }));
-                });
+                    update(s => ({
+                        ...s,
+                        isPinConfigured: configured,
+                        isLocked: configured,
+                        state: configured ? 'locked' : 'pinNotConfigured',
+                    }));
 
-                await listen('session:unlocked', () => {
-                    update(s => ({ ...s, state: 'active', isLocked: false, error: null }));
-                });
-            } catch (err) {
-                console.warn('[sessionStore] Initialization warning:', err);
-            }
+                    if (!listenersSet) {
+                        await listen('session:locked', () => {
+                            update(s => ({ ...s, state: 'locked', isLocked: true }));
+                        });
+
+                        await listen('session:auth_required', () => {
+                            update(s => ({ ...s, state: 'locked', isLocked: true }));
+                        });
+
+                        await listen('session:unlocked', () => {
+                            update(s => ({ ...s, state: 'unlocked', isLocked: false, error: null }));
+                        });
+                        listenersSet = true;
+                    }
+                } catch (err) {
+                    console.error('[sessionStore] Init error:', err);
+                    update(s => ({
+                        ...s,
+                        state: 'error',
+                        error: typeof err === 'string' ? err : 'Ошибка инициализации сессии'
+                    }));
+                    initPromise = null;
+                }
+            })();
+
+            return initPromise;
         },
 
         async setupInitialPin(pin: string): Promise<boolean> {
@@ -55,7 +74,7 @@ function createSessionStore() {
                     ...s,
                     isPinConfigured: true,
                     isLocked: false,
-                    state: 'active',
+                    state: 'unlocked',
                     error: null,
                 }));
                 return true;
@@ -72,15 +91,14 @@ function createSessionStore() {
             try {
                 const success = await invoke<boolean>('verify_pin', { pin });
                 if (success) {
-                    update(s => ({ ...s, state: 'active', isLocked: false, error: null }));
+                    update(s => ({ ...s, state: 'unlocked', isLocked: false, error: null }));
                     return true;
                 } else {
                     update(s => ({ ...s, error: 'Неверный PIN-код' }));
                     return false;
                 }
             } catch (err) {
-                const errorMsg = typeof err === 'string' ? err : 'Ошибка проверки PIN-кода';
-                update(s => ({ ...s, error: errorMsg }));
+                update(s => ({ ...s, error: typeof err === 'string' ? err : 'Ошибка проверки PIN-кода' }));
                 return false;
             }
         },
@@ -89,9 +107,14 @@ function createSessionStore() {
             try {
                 await invoke('lock_application');
             } catch {
-                // Fallback for UI simulation if command not available
+                // Simulation fallback
             }
             update(s => ({ ...s, state: 'locked', isLocked: true }));
+        },
+
+        async retryInit() {
+            initPromise = null;
+            return this.init();
         },
 
         clearError() {

@@ -6,11 +6,11 @@
   let visible = true;
 
   onMount(() => {
-    // Auto-dismiss after 900ms (300ms fade-in + 300ms hold + 300ms fade-out)
+    // Solid immediate state, only handles timeout for transition
     setTimeout(() => {
       visible = false;
-      setTimeout(() => dispatch('done'), 350);
-    }, 900);
+      setTimeout(() => dispatch('done'), 400);
+    }, 1200); // Slightly longer to cover all initial IPC
   });
 </script>
 
@@ -26,54 +26,52 @@
   .splash {
     position: fixed;
     inset: 0;
-    z-index: 999;
+    z-index: 9999; /* Absolute highest during boot */
+    background: #FAF5FF; /* Solid start to prevent flicker */
     background: linear-gradient(160deg, #FAF5FF 0%, #FCF7FA 60%, #FFF5F9 100%);
     display: flex;
     align-items: center;
     justify-content: center;
-    animation: fadeIn 0.3s ease both;
-    transition: opacity 0.3s ease;
+    transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.4s;
+    /* No fadeIn animation that starts from 0 opacity */
   }
 
   .splash.fade-out {
     opacity: 0;
+    visibility: hidden;
     pointer-events: none;
-  }
-
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
   }
 
   .splash-inner {
     text-align: center;
-    animation: riseIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both;
+    /* Subtle movement ok, but no opacity change from 0 */
+    animation: riseIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
   @keyframes riseIn {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
+    from { transform: translateY(10px); }
+    to { transform: translateY(0); }
   }
 
   .sparkle {
-    font-size: 3rem;
+    font-size: 3.5rem;
     color: #7C3AED;
-    margin-bottom: 0.4rem;
+    margin-bottom: 0.5rem;
     filter: drop-shadow(0 4px 16px rgba(124, 58, 237, 0.35));
   }
 
   .brand {
-    font-family: 'Outfit', -apple-system, sans-serif;
-    font-size: 2.4rem;
-    font-weight: 700;
+    font-family: 'Outfit', sans-serif;
+    font-size: 2.6rem;
+    font-weight: 800;
     color: #171717;
-    letter-spacing: 0.04em;
-    margin-bottom: 0.3rem;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.4rem;
   }
 
   .tagline {
-    font-family: 'Inter', -apple-system, sans-serif;
-    font-size: 1rem;
+    font-size: 1.1rem;
     color: #737373;
+    font-weight: 500;
   }
 </style>

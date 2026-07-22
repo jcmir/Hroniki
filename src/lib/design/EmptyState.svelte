@@ -1,8 +1,8 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   export let title: string = 'История Пока Пуста';
-  export let description: string = 'Сохраняйте важные жизненные объекты и события. Нажмите +, чтобы добавить первое воспоминание.';
-  export let buttonText: string = '+ Создать Воспоминание';
+  export let description: string = 'Сохраняйте важные жизненные объекты и события.';
+  export let buttonText: string = ''; // No default button text
 
   const dispatch = createEventDispatcher();
 </script>
@@ -60,5 +60,10 @@
     border-radius: var(--radius-pill);
     box-shadow: 0 4px 16px rgba(124, 58, 237, 0.25);
     cursor: pointer;
+    transition: transform 0.2s ease;
+  }
+
+  .cta-btn:active {
+    transform: scale(0.95);
   }
 </style>

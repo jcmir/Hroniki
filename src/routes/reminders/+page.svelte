@@ -4,7 +4,6 @@
   import GlassCard from '$lib/design/GlassCard.svelte';
   import ObjectAvatar from '$lib/design/ObjectAvatar.svelte';
   import EmptyState from '$lib/design/EmptyState.svelte';
-  import '../../app.css';
 
   interface MemoryCenterItem {
     id: string;
@@ -42,24 +41,12 @@
 </script>
 
 <div class="reminders-page">
-  <header class="app-bar">
-    <div class="bar-title">
-      <span class="brand-icon">📖</span>
-      <div class="brand-text">
-        <h1>ХРОНИКИ</h1>
-        <span class="sub-text">Центр Памяти</span>
-      </div>
+  <main class="page-content">
+    <div class="section-title">
+      <h2>Центр Памяти</h2>
+      <p class="subtitle">Ваши напоминания и важные даты в одном месте.</p>
     </div>
 
-    <nav class="nav-tabs">
-      <a href="/" class="tab-link">Лента</a>
-      <a href="/objects" class="tab-link">Объекты</a>
-      <a href="/reminders" class="tab-link active">Напоминания</a>
-      <a href="/settings" class="tab-link">Настройки</a>
-    </nav>
-  </header>
-
-  <main class="page-content">
     {#if loading}
       <div class="state-box">
         <div class="spinner"></div>
@@ -69,7 +56,7 @@
     {:else if allItems.length === 0}
       <EmptyState
         title="Центр Памяти Пуст"
-        description="Добавьте напоминания к жизненным событиям — они появятся здесь."
+        description="Здесь появятся напоминания и исторические события, когда вы начнете вести Хроники."
       />
 
     {:else}
@@ -98,7 +85,7 @@
       <!-- Section: On This Day -->
       {#if onThisDayItems.length > 0}
         <section class="memory-section">
-          <h2 class="section-label memory-label">🕰️ В этот день 1 год назад</h2>
+          <h2 class="section-label memory-label">🕰️ В этот день {onThisDayItems[0].years_ago} год назад</h2>
           <div class="items-stack">
             {#each onThisDayItems as item (item.id)}
               <GlassCard hoverEffect={true}>
@@ -148,78 +135,30 @@
 
 <style>
   .reminders-page {
-    min-height: 100vh;
-    background-color: var(--bg-app);
-    color: var(--text-main);
-    display: flex;
-    flex-direction: column;
-    padding-bottom: 4rem;
+    width: 100%;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 1.5rem 1rem;
   }
 
-  .app-bar {
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    background-color: var(--bg-glass);
-    backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--border-subtle);
-    padding: 1rem 1.25rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+  .section-title {
+    margin-bottom: 1.5rem;
   }
 
-  .bar-title { display: flex; align-items: center; gap: 0.6rem; }
-  .brand-icon { font-size: 1.5rem; }
-
-  .brand-text h1 {
+  .section-title h2 {
     font-family: var(--font-heading);
-    font-size: 1.15rem;
+    font-size: 1.4rem;
     font-weight: 700;
     color: var(--text-main);
-    line-height: 1.1;
   }
 
-  .sub-text { font-size: 0.75rem; color: var(--text-muted); }
-
-  .nav-tabs {
-    display: flex;
-    gap: 0.3rem;
-    background-color: rgba(23, 23, 23, 0.05);
-    padding: 0.2rem;
-    border-radius: var(--radius-pill);
-    flex-wrap: wrap;
-  }
-
-  .tab-link {
-    text-decoration: none;
-    font-size: 0.775rem;
-    font-weight: 500;
+  .subtitle {
+    font-size: 0.85rem;
     color: var(--text-muted);
-    padding: 0.3rem 0.7rem;
-    border-radius: var(--radius-pill);
-    transition: all 0.2s ease;
+    margin-top: 0.2rem;
   }
 
-  .tab-link.active {
-    background-color: #FFF;
-    color: var(--accent-primary);
-    font-weight: 600;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  }
-
-  .page-content {
-    flex: 1;
-    max-width: 640px;
-    width: 100%;
-    margin: 0 auto;
-    padding: 1.25rem 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 2rem;
-  }
-
-  .memory-section { display: flex; flex-direction: column; gap: 0.75rem; }
+  .memory-section { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 2rem; }
 
   .section-label {
     font-family: var(--font-heading);

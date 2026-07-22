@@ -2,8 +2,8 @@
   import { invoke } from '@tauri-apps/api/core';
   import { onMount } from 'svelte';
   import { settingsStore } from '$lib/stores/settings';
+  import { sessionStore } from '$lib/stores/session';
   import GlassCard from '$lib/design/GlassCard.svelte';
-  import '../../app.css';
 
   let profileName = $settingsStore.settings.profile_name || '';
   let backupPassword = '';
@@ -90,26 +90,20 @@
       isWorking = false;
     }
   }
+
+  async function handleResetPin() {
+    if (!confirm('Вы уверены, что хотите удалить PIN-код? Это не удалит ваши данные.')) return;
+    try {
+      await invoke('disable_pin');
+      await sessionStore.init();
+      statusMsg = 'PIN-код сброшен';
+    } catch (e) {
+      errorMsg = 'Ошибка сброса PIN';
+    }
+  }
 </script>
 
 <div class="settings-page">
-  <header class="app-bar">
-    <div class="bar-title">
-      <span class="brand-icon">📖</span>
-      <div class="brand-text">
-        <h1>ХРОНИКИ</h1>
-        <span class="sub-text">Настройки и Бэкап</span>
-      </div>
-    </div>
-
-    <nav class="nav-tabs">
-      <a href="/" class="tab-link">Лента</a>
-      <a href="/objects" class="tab-link">Объекты</a>
-      <a href="/reminders" class="tab-link">Напоминания</a>
-      <a href="/settings" class="tab-link active">Настройки</a>
-    </nav>
-  </header>
-
   <main class="page-content">
     <div class="section-title">
       <h2>Параметры и Защита</h2>
@@ -141,7 +135,7 @@
         <div class="settings-section">
           <h3>Зашифрованный Бэкап</h3>
           <p class="desc-text">
-            Полный бэкап всех объектов, хроник и фото в зашифрованный архив <code>.hroniki</code> с манифестом версии.
+            Полный бэкап всех объектов, хроник и фото в зашифрованный архив <code>.hroniki</code>.
           </p>
 
           <div class="form-group">
@@ -156,13 +150,22 @@
 
           <div class="btn-row">
             <button class="export-btn" disabled={isWorking} on:click={handleExport}>
-              📤 Экспортировать Бэкап
+              📤 Экспорт
             </button>
 
             <button class="import-btn" disabled={isWorking} on:click={handleImport}>
-              📥 Импортировать Бэкап
+              📥 Импорт
             </button>
           </div>
+        </div>
+      </GlassCard>
+
+      <!-- Debug Section -->
+      <GlassCard hoverEffect={false}>
+        <div class="settings-section">
+          <h3 style="color: #ef4444">🛠 Отладка</h3>
+          <p class="desc-text">Сброс настроек безопасности для тестирования.</p>
+          <button class="reset-pin-btn" on:click={handleResetPin}>Сбросить PIN-код</button>
         </div>
       </GlassCard>
 
@@ -193,8 +196,7 @@
           <div class="settings-section">
             <h3>🛡 Диагностика</h3>
             <p class="desc-text">
-              Найдено {crashLogs.length} {crashLogs.length === 1 ? 'аварийный отчёт' : 'аварийных отчёта'}.
-              Данные хранятся только на устройстве.
+              Найдено {crashLogs.length} отчётов.
             </p>
 
             <div class="crash-list">
@@ -219,7 +221,7 @@
               disabled={clearingLogs}
               on:click={handleClearLogs}
             >
-              {clearingLogs ? 'Очищаем...' : '🗑 Удалить все отчёты'}
+              {clearingLogs ? 'Очищаем...' : '🗑 Удалить отчёты'}
             </button>
           </div>
         </GlassCard>
@@ -230,84 +232,14 @@
 
 <style>
   .settings-page {
-    min-height: 100vh;
-    background-color: var(--bg-app);
-    color: var(--text-main);
-    display: flex;
-    flex-direction: column;
-    padding-bottom: 5rem;
-  }
-
-  .app-bar {
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    background-color: var(--bg-glass);
-    backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--border-subtle);
-    padding: 1rem 1.25rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .bar-title {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-  }
-
-  .brand-icon {
-    font-size: 1.5rem;
-  }
-
-  .brand-text h1 {
-    font-family: var(--font-heading);
-    font-size: 1.15rem;
-    font-weight: 700;
-    color: var(--text-main);
-  }
-
-  .sub-text {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-  }
-
-  .nav-tabs {
-    display: flex;
-    gap: 0.4rem;
-    background-color: rgba(23, 23, 23, 0.05);
-    padding: 0.2rem;
-    border-radius: var(--radius-pill);
-  }
-
-  .tab-link {
-    text-decoration: none;
-    font-size: 0.825rem;
-    font-weight: 500;
-    color: var(--text-muted);
-    padding: 0.35rem 0.85rem;
-    border-radius: var(--radius-pill);
-    transition: all 0.2s ease;
-  }
-
-  .tab-link.active {
-    background-color: #FFF;
-    color: var(--accent-primary);
-    font-weight: 600;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  }
-
-  .page-content {
-    flex: 1;
-    max-width: 640px;
     width: 100%;
+    max-width: 640px;
     margin: 0 auto;
     padding: 1.5rem 1rem;
   }
 
   .section-title {
-    margin-bottom: 1.25rem;
+    margin-bottom: 1.5rem;
   }
 
   .section-title h2 {
@@ -524,4 +456,15 @@
   }
 
   .clear-logs-btn:hover { border-color: var(--accent-pink); color: var(--accent-pink); }
+
+  .reset-pin-btn {
+    width: 100%;
+    padding: 0.8rem;
+    background-color: #fef2f2;
+    border: 1px solid #fee2e2;
+    color: #b91c1c;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    cursor: pointer;
+  }
 </style>

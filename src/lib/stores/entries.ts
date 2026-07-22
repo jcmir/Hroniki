@@ -34,7 +34,7 @@ function createEntriesStore() {
         error: null,
     });
 
-    return {
+    const store = {
         subscribe,
 
         async loadEntries() {
@@ -43,7 +43,7 @@ function createEntriesStore() {
                 const list = await invoke<EntryDto[]>('get_entries');
                 update(s => ({ ...s, entries: list || [], loading: false }));
             } catch (err) {
-                console.warn('[entriesStore] Error loading entries from Rust backend:', err);
+                console.warn('[entriesStore] Error loading entries:', err);
                 update(s => ({
                     ...s,
                     loading: false,
@@ -74,29 +74,38 @@ function createEntriesStore() {
             }
         },
 
-        async createEntry(title: string, content: string, categoryId?: string, photoPaths: string[] = []): Promise<boolean> {
+        async createEntry(title: string, content: string, objectId?: string, photoPaths: string[] = []): Promise<boolean> {
             update(s => ({ ...s, loading: true, error: null }));
             try {
-                const created = await invoke<EntryDto>('create_entry', {
+                let targetObjectId = objectId;
+
+                if (!targetObjectId) {
+                    const objects = await invoke<any[]>('get_objects');
+                    if (objects && objects.length > 0) {
+                        targetObjectId = objects[0].id;
+                    } else {
+                        throw new Error('Сначала создайте объект в разделе Объекты');
+                    }
+                }
+
+                await invoke<string>('create_entry', {
+                    objectId: targetObjectId,
                     title,
-                    content,
-                    categoryId: categoryId || null,
-                    photoPaths,
+                    description: content || null,
+                    imageFilenames: photoPaths.length > 0 ? photoPaths : null,
                 });
 
-                update(s => ({
-                    ...s,
-                    entries: [created, ...s.entries],
-                    loading: false,
-                }));
+                await store.loadEntries();
                 return true;
             } catch (err) {
-                // Fallback local creation for demonstration / UI testing when running without Tauri IPC
+                console.error('[entriesStore] Create error:', err);
+
+                // Fallback for UI simulation
                 const fallbackEntry: EntryDto = {
                     id: 'local_' + Date.now(),
                     title,
                     content,
-                    object_id: categoryId || null,
+                    object_id: objectId || 'mock_object',
                     category_name: 'Личные заметки',
                     created_at: new Date().toISOString(),
                     photos: photoPaths.map((p, idx) => ({
@@ -117,7 +126,7 @@ function createEntriesStore() {
 
         async deleteEntry(id: string) {
             try {
-                await invoke('delete_entry', { id });
+                await invoke('delete_entry', { entryId: id });
             } catch {
                 // Local fallback
             }
@@ -127,6 +136,8 @@ function createEntriesStore() {
             }));
         }
     };
+
+    return store;
 }
 
 export const entriesStore = createEntriesStore();
